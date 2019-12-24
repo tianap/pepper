@@ -36,8 +36,15 @@ if __name__ == '__main__':
         help="FASTA file containing the draft assembly."
     )
     parser.add_argument(
-        "-tb",
-        "--truth_bam",
+        "-tb1",
+        "--truth_bam_h1",
+        type=str,
+        default=None,
+        help="BAM file containing mapping of true assembly to the draft assembly."
+    )
+    parser.add_argument(
+        "-tb2",
+        "--truth_bam_h2",
         type=str,
         default=None,
         help="BAM file containing mapping of true assembly to the draft assembly."
@@ -45,6 +52,12 @@ if __name__ == '__main__':
     parser.add_argument(
         "-r",
         "--region",
+        type=str,
+        help="Region in [chr_name:start-end] format"
+    )
+    parser.add_argument(
+        "-rb",
+        "--region_bed",
         type=str,
         help="Region in [chr_name:start-end] format"
     )
@@ -70,18 +83,20 @@ if __name__ == '__main__':
         help="Number of threads to use. Default is 5."
     )
     FLAGS, unparsed = parser.parse_known_args()
-    chr_list = UserInterfaceSupport.get_chromosome_list(FLAGS.region, FLAGS.draft)
+    chr_list = UserInterfaceSupport.get_chromosome_list(FLAGS.region, FLAGS.draft, FLAGS.region_bed)
 
     if FLAGS.train_mode:
-        if not FLAGS.truth_bam:
-            raise Exception(TextColor.RED + "ERROR: TRAIN MODE REQUIRES --truth_bam TO BE SET.\n" + TextColor.END)
+        if not FLAGS.truth_bam_h1 or not FLAGS.truth_bam_h2:
+            raise Exception(TextColor.RED + "ERROR: TRAIN MODE REQUIRES --truth_bam_h1 "
+                                            "and --truth_bam_h2 TO BE SET.\n" + TextColor.END)
 
     output_dir = UserInterfaceSupport.handle_output_directory(os.path.abspath(FLAGS.output_dir))
 
     UserInterfaceSupport.chromosome_level_parallelization(chr_list,
                                                           FLAGS.bam,
                                                           FLAGS.draft,
-                                                          FLAGS.truth_bam,
+                                                          FLAGS.truth_bam_h1,
+                                                          FLAGS.truth_bam_h2,
                                                           output_dir,
                                                           FLAGS.threads,
                                                           FLAGS.train_mode)

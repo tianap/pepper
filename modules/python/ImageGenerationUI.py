@@ -14,7 +14,7 @@ class UserInterfaceView:
     """
     Process manager that runs sequence of processes to generate images and their labels.
     """
-    def __init__(self, chromosome_name, bam_file_path, draft_file_path, truth_bam, train_mode):
+    def __init__(self, chromosome_name, bam_file_path, draft_file_path, truth_bam_h1, truth_bam_h2, train_mode):
         """
         Initialize a manager object
         :param chromosome_name: Name of the chromosome
@@ -33,7 +33,8 @@ class UserInterfaceView:
         self.truth_bam_handler = None
 
         if self.train_mode:
-            self.truth_bam_handler = PEPPER.BAM_handler(truth_bam)
+            self.truth_bam_handler_h1 = PEPPER.BAM_handler(truth_bam_h1)
+            self.truth_bam_handler_h2 = PEPPER.BAM_handler(truth_bam_h2)
 
         # --- initialize names ---
         # name of the chromosome
@@ -44,7 +45,6 @@ class UserInterfaceView:
         Generate labeled images of a given region of the genome
         :param start_position: Start position of the region
         :param end_position: End position of the region
-        :param realignment_flag: If true then realignment will be performed
         :return:
         """
         alignment_summarizer = AlignmentSummarizer(self.bam_handler,
@@ -53,7 +53,8 @@ class UserInterfaceView:
                                                    start_position,
                                                    end_position)
 
-        images, lables, positions, image_chunk_ids = alignment_summarizer.create_summary(self.truth_bam_handler,
+        images, lables, positions, image_chunk_ids = alignment_summarizer.create_summary(self.truth_bam_handler_h1,
+                                                                                         self.truth_bam_handler_h2,
                                                                                          self.train_mode)
 
         return images, lables, positions, image_chunk_ids
@@ -79,7 +80,7 @@ class UserInterfaceSupport:
         return output_directory
 
     @staticmethod
-    def get_chromosome_list(chromosome_names, ref_file):
+    def get_chromosome_list(chromosome_names, ref_file, region_bed):
         """
         PARSES THROUGH THE CHROMOSOME PARAMETER TO FIND OUT WHICH REGIONS TO PROCESS
         :param chromosome_names: NAME OF CHROMOSOME
@@ -90,6 +91,20 @@ class UserInterfaceSupport:
             fasta_handler = PEPPER.FASTA_handler(ref_file)
             chromosome_names = fasta_handler.get_chromosome_names()
             chromosome_names = ','.join(chromosome_names)
+
+        if region_bed:
+            chromosome_name_list = []
+            with open(region_bed) as fp:
+                line = fp.readline()
+                cnt = 1
+                while line:
+                    line_to_list = line.rstrip().split('\t')
+                    chr_name, start_pos, end_pos = line_to_list[0], int(line_to_list[1]), int(line_to_list[2])
+                    region = sorted([start_pos, end_pos])
+                    chromosome_name_list.append((chr_name, region))
+                    line = fp.readline()
+                cnt += 1
+            return chromosome_name_list
 
         split_names = chromosome_names.strip().split(',')
         split_names = [name.strip() for name in split_names]
@@ -137,12 +152,13 @@ class UserInterfaceSupport:
 
     @staticmethod
     def single_worker(args, _start, _end):
-        chr_name, bam_file, draft_file, truth_bam, train_mode = args
+        chr_name, bam_file, draft_file, truth_bam_h1, truth_bam_h2, train_mode = args
 
         view = UserInterfaceView(chromosome_name=chr_name,
                                  bam_file_path=bam_file,
                                  draft_file_path=draft_file,
-                                 truth_bam=truth_bam,
+                                 truth_bam_h1=truth_bam_h1,
+                                 truth_bam_h2=truth_bam_h2,
                                  train_mode=train_mode)
 
         images, labels, positions, image_chunk_ids = view.parse_region(_start, _end)
@@ -154,7 +170,7 @@ class UserInterfaceSupport:
     def image_generator(args, all_intervals, total_threads, thread_id):
         thread_prefix = "[THREAD " + "{:02d}".format(thread_id) + "]"
 
-        output_path, bam_file, draft_file, truth_bam, train_mode = args
+        output_path, bam_file, draft_file, truth_bam_h1, truth_bam_h2, train_mode = args
         file_name = output_path + "pepper_images_thread_" + str(thread_id) + ".hdf"
 
         intervals = [r for i, r in enumerate(all_intervals) if i % total_threads == thread_id]
@@ -169,7 +185,7 @@ class UserInterfaceSupport:
         with DataStore(file_name, 'w') as output_hdf_file:
             for counter, interval in enumerate(intervals):
                 chr_name, _start, _end = interval
-                img_args = (chr_name, bam_file, draft_file, truth_bam, train_mode)
+                img_args = (chr_name, bam_file, draft_file, truth_bam_h1, truth_bam_h2, train_mode)
                 images, labels, positions, chunk_ids, region = UserInterfaceSupport.single_worker(img_args, _start, _end)
 
                 for i, image in enumerate(images):
@@ -199,7 +215,8 @@ class UserInterfaceSupport:
     def chromosome_level_parallelization(chr_list,
                                          bam_file,
                                          draft_file,
-                                         truth_bam,
+                                         truth_bam_h1,
+                                         truth_bam_h2,
                                          output_path,
                                          total_threads,
                                          train_mode):
@@ -232,7 +249,7 @@ class UserInterfaceSupport:
                          + " TOTAL INTERVALS: " + str(len(all_intervals)) + "\n" + TextColor.END)
         sys.stderr.flush()
 
-        args = (output_path, bam_file, draft_file, truth_bam, train_mode)
+        args = (output_path, bam_file, draft_file, truth_bam_h1, truth_bam_h2, train_mode)
         with concurrent.futures.ProcessPoolExecutor(max_workers=total_threads) as executor:
             futures = [executor.submit(UserInterfaceSupport.image_generator, args, all_intervals, total_threads, thread_id)
                        for thread_id in range(0, total_threads)]

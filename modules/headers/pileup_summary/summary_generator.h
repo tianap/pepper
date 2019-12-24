@@ -28,8 +28,10 @@ class SummaryGenerator {
     map<long long, long long> longest_insert_count;
     map<long long, double> coverage;
 
-    map< pair<long long, int>, char> insert_labels;
-    map< long long, char> base_labels;
+    map< pair<long long, int>, char> insert_labels_h1;
+    map< pair<long long, int>, char> insert_labels_h2;
+    map< long long, char> base_labels_h1;
+    map< long long, char> base_labels_h2;
 public:
     vector< vector<uint8_t> > image;
     vector<uint8_t> labels;
@@ -47,11 +49,13 @@ public:
     void generate_train_summary(vector <type_read> &reads,
                                 long long start_pos,
                                 long long end_pos,
-                                type_read truth_read);
+                                type_read truth_read_h1,
+                                type_read truth_read_h2);
 
     void iterate_over_read(type_read read, long long region_start, long long region_end);
     int get_sequence_length(long long start_pos, long long end_pos);
-    void generate_labels(type_read truth_reads, long long region_start, long long region_end);
+    void generate_labels(type_read truth_read_h1, type_read truth_read_h2,
+                         long long region_start, long long region_end);
     void generate_ref_features();
     void debug_print(long long start_pos, long long end_pos);
     void generate_image(long long start_pos, long long end_pos);

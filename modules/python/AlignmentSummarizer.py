@@ -178,7 +178,26 @@ class AlignmentSummarizer:
 
         return realigned_reads
 
-    def create_summary(self, truth_bam_handler, train_mode, realignment_flag=True):
+    @staticmethod
+    def range_intersection(intervals):
+        left = intervals[0][0]
+        right = intervals[0][1]
+
+        found_overlap = False
+        for i in range(1, len(intervals)):
+            if intervals[i][0] > right or intervals[i][1] < left:
+                print(-1)
+            else:
+                found_overlap = True
+                left = max(left, intervals[i][0])
+                right = min(right, intervals[i][1])
+
+        if found_overlap:
+            return [left, right]
+        else:
+            return None
+
+    def create_summary(self, truth_bam_handler_h1, truth_bam_handler_h2, train_mode, realignment_flag=True):
         log_prefix = "[" + self.chromosome_name + ":" + str(self.region_start_position) + "-" \
                      + str(self.region_end_position) + "]"
         all_images = []
@@ -189,37 +208,78 @@ class AlignmentSummarizer:
         if train_mode:
             # get the reads from the bam file
             include_supplementary = False
-            truth_reads = truth_bam_handler.get_reads(self.chromosome_name,
-                                                      self.region_start_position,
-                                                      self.region_end_position,
-                                                      include_supplementary,
-                                                      0,
-                                                      0)
+            truth_reads_h1 = truth_bam_handler_h1.get_reads(self.chromosome_name,
+                                                            self.region_start_position,
+                                                            self.region_end_position,
+                                                            include_supplementary,
+                                                            0,
+                                                            0)
+
+            truth_reads_h2 = truth_bam_handler_h2.get_reads(self.chromosome_name,
+                                                            self.region_start_position,
+                                                            self.region_end_position,
+                                                            include_supplementary,
+                                                            0,
+                                                            0)
 
             # do a local realignment of truth reads to reference
             if realignment_flag:
-                truth_reads = self.reads_to_reference_realignment(self.region_start_position,
-                                                                  self.region_end_position,
-                                                                  truth_reads)
+                truth_reads_h1 = self.reads_to_reference_realignment(self.region_start_position,
+                                                                     self.region_end_position,
+                                                                     truth_reads_h1)
+                truth_reads_h2 = self.reads_to_reference_realignment(self.region_start_position,
+                                                                     self.region_end_position,
+                                                                     truth_reads_h2)
 
-            truth_regions = []
-            for read in truth_reads:
-                # start, end, read, is_kept, is_h1
-                truth_regions.append([read.pos, read.pos_end - 1, read,  True])
+            truth_regions_h1 = []
+            for read in truth_reads_h1:
+                # start, end, read, is_kept
+                truth_regions_h1.append([read.pos, read.pos_end - 1, read,  True])
+
+            truth_regions_h2 = []
+            for read in truth_reads_h2:
+                # start, end, read, is_kept
+                truth_regions_h2.append([read.pos, read.pos_end - 1, read,  True])
 
             # these are all the regions we will use to generate summaries from.
             # It's important to notice that we need to realign the reads to the reference before we do that.
-            truth_regions = self.remove_conflicting_regions(truth_regions)
+            truth_regions_h1 = self.remove_conflicting_regions(truth_regions_h1)
+            truth_regions_h2 = self.remove_conflicting_regions(truth_regions_h2)
+            regions_h1 = []
+            for start, end_pos, read, is_kept in truth_regions_h1:
+                if is_kept:
+                    regions_h1.append([start, end_pos])
+            regions_h2 = []
+            for start_pos, end_pos, read, is_kept in truth_regions_h2:
+                if is_kept:
+                    regions_h2.append([start_pos, end_pos])
+
+            truth_regions = []
+            for reg_h1 in regions_h1:
+                reg = AlignmentSummarizer.range_intersection([reg_h1] + regions_h2)
+                if reg is not None:
+                    truth_regions.append(reg)
 
             if not truth_regions:
                 # sys.stderr.write(TextColor.GREEN + "INFO: " + log_prefix + " NO TRAINING REGION FOUND.\n"
                 #                  + TextColor.END)
                 return [], [], [], []
 
-            for region in truth_regions:
-                region_start, region_end, truth_read, is_kept = tuple(region)
+            for region_start, region_end in truth_regions:
+                truth_reads_h1 = truth_bam_handler_h1.get_reads(self.chromosome_name,
+                                                                self.region_start_position,
+                                                                self.region_end_position,
+                                                                include_supplementary,
+                                                                0,
+                                                                0)
 
-                if not is_kept:
+                truth_reads_h2 = truth_bam_handler_h2.get_reads(self.chromosome_name,
+                                                                self.region_start_position,
+                                                                self.region_end_position,
+                                                                include_supplementary,
+                                                                0,
+                                                                0)
+                if len(truth_reads_h1) > 1 or len(truth_reads_h2) > 1:
                     continue
 
                 ref_start = region_start
@@ -278,7 +338,8 @@ class AlignmentSummarizer:
                 summary_generator.generate_train_summary(all_reads,
                                                          region_start,
                                                          region_end,
-                                                         truth_read)
+                                                         truth_reads_h1[0],
+                                                         truth_reads_h2[0])
 
                 images, labels, positions, chunk_ids = self.chunk_images_train(summary_generator,
                                                                                chunk_size=ImageSizeOptions.SEQ_LENGTH,
