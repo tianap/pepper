@@ -20,7 +20,6 @@ Input:
 Return:
 - A trained model
 """
-CLASS_WEIGHTS = [1.0, 1.0, 1.0, 1.0, 1.0]
 
 
 def save_best_model(transducer_model, model_optimizer, hidden_size, layers, epoch,
@@ -44,7 +43,7 @@ def save_best_model(transducer_model, model_optimizer, hidden_size, layers, epoc
         'gru_layers': layers,
         'epochs': epoch,
     }, file_name)
-    sys.stderr.write(TextColor.RED + "\nMODEL SAVED SUCCESSFULLY.\n" + TextColor.END)
+    sys.stderr.write(TextColor.GREEN + "INFO: MODEL" + file_name + " SAVED SUCCESSFULLY.\n" + TextColor.END)
 
 
 def train(train_file, test_file, batch_size, epoch_limit, gpu_mode, num_workers, retrain_model,
@@ -106,7 +105,7 @@ def train(train_file, test_file, batch_size, epoch_limit, gpu_mode, num_workers,
     if gpu_mode:
         transducer_model = torch.nn.DataParallel(transducer_model).cuda()
 
-    class_weights = torch.Tensor(CLASS_WEIGHTS)
+    class_weights = torch.Tensor(ImageSizeOptions.class_weights)
     # Loss
     criterion = nn.CrossEntropyLoss(class_weights)
 
@@ -145,6 +144,7 @@ def train(train_file, test_file, batch_size, epoch_limit, gpu_mode, num_workers,
                     hidden = hidden.cuda()
 
                 for i in range(0, ImageSizeOptions.SEQ_LENGTH, TrainOptions.WINDOW_JUMP):
+
                     model_optimizer.zero_grad()
                     if i + TrainOptions.TRAIN_WINDOW > ImageSizeOptions.SEQ_LENGTH:
                         break
@@ -191,7 +191,8 @@ def train(train_file, test_file, batch_size, epoch_limit, gpu_mode, num_workers,
             # encoder_model, decoder_model, encoder_optimizer, decoder_optimizer, hidden_size, layers, epoch,
             # file_name
             save_best_model(transducer_model, model_optimizer,
-                            hidden_size, gru_layers, epoch, model_dir + "_epoch_" + str(epoch + 1) + '_checkpoint.pkl')
+                            hidden_size, gru_layers, epoch, model_dir
+                            + "PEPPER_epoch_" + str(epoch + 1) + '_checkpoint.pkl')
 
             test_loss_logger.write(str(epoch + 1) + "," + str(stats['loss']) + "," + str(stats['accuracy']) + "\n")
             confusion_matrix_logger.write(str(epoch + 1) + "\n" + str(stats_dictioanry['confusion_matrix']) + "\n")

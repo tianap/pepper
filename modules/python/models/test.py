@@ -37,8 +37,7 @@ def test(data_file, batch_size, gpu_mode, transducer_model, num_workers, gru_lay
 
     # set the evaluation mode of the model
     transducer_model.eval()
-
-    class_weights = torch.Tensor(CLASS_WEIGHTS)
+    class_weights = torch.Tensor(ImageSizeOptions.class_weights)
     # Loss
     criterion = nn.CrossEntropyLoss(class_weights)
 
@@ -87,13 +86,34 @@ def test(data_file, batch_size, gpu_mode, transducer_model, num_workers, gru_lay
                 pbar.update(1)
                 cm_value = confusion_matrix.value()
                 denom = cm_value.sum() if cm_value.sum() > 0 else 1.0
-                accuracy = 100.0 * (cm_value[0][0] + cm_value[1][1] + cm_value[2][2]
-                                    + cm_value[3][3] + cm_value[4][4]) / denom
+
+                total_accurate = 0
+                for i in range(0, ImageSizeOptions.TOTAL_LABELS):
+                    total_accurate = total_accurate + cm_value[i][i]
+
+                accuracy = (100.0 * total_accurate) / denom
                 pbar.set_description("Accuracy: " + str(round(accuracy, 5)))
 
     avg_loss = total_loss / total_images if total_images else 0
 
-    sys.stderr.write(TextColor.YELLOW+'\nTest Loss: ' + str(avg_loss) + "\n"+TextColor.END)
-    sys.stderr.write("Confusion Matrix: \n" + str(confusion_matrix.conf) + "\n" + TextColor.END)
+    sys.stderr.write(TextColor.YELLOW+'Test Loss: ' + str(avg_loss) + "\n"+TextColor.END)
+
+    print(TextColor.CYAN + "Confusion Matrix:" + TextColor.END, file=sys.stderr)
+    print(TextColor.BOLD + '', end='\t', file=sys.stderr)
+    for label in ImageSizeOptions.decoded_labels:
+        print(label, end='\t', file=sys.stderr)
+    print(TextColor.END, file=sys.stderr)
+
+    for i, row in enumerate(confusion_matrix.value()):
+        print(TextColor.BOLD + ImageSizeOptions.decoded_labels[i] + TextColor.END, end='\t', file=sys.stderr)
+        for j, val in enumerate(row):
+            if i == j:
+                color = TextColor.GREEN
+            else:
+                color = TextColor.RED
+
+            print(color + str(val) + TextColor.END, end='\t', file=sys.stderr)
+        print(file=sys.stderr)
+
 
     return {'loss': avg_loss, 'accuracy': accuracy, 'confusion_matrix': str(confusion_matrix.conf)}
