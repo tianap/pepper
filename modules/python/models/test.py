@@ -99,20 +99,20 @@ def test(data_file, batch_size, gpu_mode, transducer_model, num_workers, gru_lay
     sys.stderr.write(TextColor.YELLOW+'Test Loss: ' + str(avg_loss) + "\n"+TextColor.END)
 
     print(TextColor.CYAN + "Confusion Matrix:" + TextColor.END, file=sys.stderr)
-    print(TextColor.BOLD + '', end='\t', file=sys.stderr)
+    print(TextColor.BOLD + '  ', end='          ', file=sys.stderr)
     for label in ImageSizeOptions.decoded_labels:
-        print(label, end='\t', file=sys.stderr)
+        print(label, end='         ', file=sys.stderr)
     print(TextColor.END, file=sys.stderr)
 
     for i, row in enumerate(confusion_matrix.value()):
-        print(TextColor.BOLD + ImageSizeOptions.decoded_labels[i] + TextColor.END, end='\t', file=sys.stderr)
+        print(TextColor.BOLD + ImageSizeOptions.decoded_labels[i] + TextColor.END, end='   ', file=sys.stderr)
         for j, val in enumerate(row):
             if i == j:
                 color = TextColor.GREEN
             else:
                 color = TextColor.RED
 
-            print(color + str(val) + TextColor.END, end='\t', file=sys.stderr)
+            print(color + "{0:9d}".format(val) + TextColor.END, end='  ', file=sys.stderr)
         print(file=sys.stderr)
 
 
