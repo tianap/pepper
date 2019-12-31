@@ -21,6 +21,39 @@ GAP_EXTEND_PENALTY = 2
 MIN_SEQUENCE_REQUIRED_FOR_MULTITHREADING = 2
 
 
+def decode_bases(pred_code):
+    if pred_code == 0:
+        return ['*', '*']
+    elif pred_code == 1:
+        return ['A', 'A']
+    elif pred_code == 2:
+        return ['A', 'C']
+    elif pred_code == 3:
+        return ['A', 'T']
+    elif pred_code == 4:
+        return ['A', 'G']
+    elif pred_code == 5:
+        return ['A', '*']
+    elif pred_code == 6:
+        return ['C', 'C']
+    elif pred_code == 7:
+        return ['C', 'T']
+    elif pred_code == 8:
+        return ['C', 'G']
+    elif pred_code == 9:
+        return ['C', '*']
+    elif pred_code == 10:
+        return ['T', 'T']
+    elif pred_code == 11:
+        return ['T', 'G']
+    elif pred_code == 12:
+        return ['T', '*']
+    elif pred_code == 13:
+        return ['G', 'G']
+    elif pred_code == 14:
+        return ['G', '*']
+
+
 def get_file_paths_from_directory(directory_path):
     """
     Returns all paths of files given a directory path
@@ -165,9 +198,11 @@ def alignment_stitch(sequence_chunks):
     return contig, running_start, running_end, running_sequence
 
 
-def small_chunk_stitch(file_name, contig, small_chunk_keys):
+def small_chunk_stitch(file_name, contig, small_chunk_keys, reference_path):
     # for chunk_key in small_chunk_keys:
     name_sequence_tuples = list()
+    fasta_handler = PEPPER.FASTA_handler(reference_path)
+    candidate_variants = defaultdict(list)
 
     for contig_name, _st, _end in small_chunk_keys:
         chunk_name = contig_name + '-' + str(_st) + '-' + str(_end)
@@ -178,6 +213,12 @@ def small_chunk_stitch(file_name, contig, small_chunk_keys):
 
         with h5py.File(file_name, 'r') as hdf5_file:
             smaller_chunks = set(hdf5_file['predictions'][contig][chunk_name].keys()) - {'contig_start', 'contig_end'}
+
+        reference_sequence = fasta_handler.get_reference_sequence(contig_name, contig_start, contig_end + 20)
+
+        reference_base_dict = defaultdict()
+        for i, base in enumerate(reference_sequence):
+            reference_base_dict[i + contig_start] = base
 
         smaller_chunks = sorted(smaller_chunks)
         all_positions = set()
@@ -193,24 +234,18 @@ def small_chunk_stitch(file_name, contig, small_chunk_keys):
             base_predictions = np.array(bases, dtype=np.int)
 
             for pos, indx, base_pred in zip(positions, indices, base_predictions):
-                if indx < 0 or pos < 0:
+                if indx < 0 or pos < 0 or indx > 0:
                     continue
                 if (pos, indx) not in base_prediction_dict:
-                    base_prediction_dict[(pos, indx)] = base_pred
-                    all_positions.add((pos, indx))
+                    predicted_bases = decode_bases(base_pred)
+                    reference_base = reference_base_dict[pos]
+                    if reference_base != predicted_bases[0] or reference_base != predicted_bases[1]:
+                        candidate_variants[pos].append([reference_base] + predicted_bases)
 
-        pos_list = sorted(list(all_positions), key=lambda element: (element[0], element[1]))
-        dict_fetch = operator.itemgetter(*pos_list)
-        predicted_base_labels = list(dict_fetch(base_prediction_dict))
-        sequence = ''.join([label_decoder[base] for base in predicted_base_labels])
-        name_sequence_tuples.append((contig, contig_start, contig_end, sequence))
-
-    name_sequence_tuples = sorted(name_sequence_tuples, key=lambda element: (element[1], element[2]))
-    contig, running_start, running_end, running_sequence = alignment_stitch(name_sequence_tuples)
-    return contig, running_start, running_end, running_sequence
+    return contig, candidate_variants
 
 
-def create_consensus_sequence(hdf5_file_path, contig, sequence_chunk_keys, threads):
+def create_consensus_sequence(hdf5_file_path, reference_path, contig, sequence_chunk_keys, threads):
     sequence_chunk_keys = sorted(sequence_chunk_keys)
     sequence_chunk_key_list = list()
     for sequence_chunk_key in sequence_chunk_keys:
@@ -218,23 +253,25 @@ def create_consensus_sequence(hdf5_file_path, contig, sequence_chunk_keys, threa
         sequence_chunk_key_list.append((contig, int(st), int(end)))
 
     sequence_chunk_key_list = sorted(sequence_chunk_key_list, key=lambda element: (element[1], element[2]))
+    all_candidates = defaultdict(list)
 
-    sequence_chunks = list()
     # generate the dictionary in parallel
     with concurrent.futures.ProcessPoolExecutor(max_workers=threads) as executor:
         file_chunks = chunks(sequence_chunk_key_list, max(MIN_SEQUENCE_REQUIRED_FOR_MULTITHREADING,
                                                           int(len(sequence_chunk_key_list) / threads) + 1))
 
-        futures = [executor.submit(small_chunk_stitch, hdf5_file_path, contig, file_chunk) for file_chunk in file_chunks]
+        futures = [executor.submit(small_chunk_stitch, hdf5_file_path, contig, file_chunk, reference_path)
+                   for file_chunk in file_chunks]
         for fut in concurrent.futures.as_completed(futures):
             if fut.exception() is None:
-                contig, contig_start, contig_end, sequence = fut.result()
-                sequence_chunks.append((contig, contig_start, contig_end, sequence))
+                contig, candidate_variants = fut.result()
+                for k, v in candidate_variants.items():
+                    if k in all_candidates:
+                        all_candidates[k].extend(v)
+                    else:
+                        all_candidates[k] = candidate_variants[k]
             else:
                 sys.stderr.write("ERROR: " + str(fut.exception()) + "\n")
             fut._result = None  # python issue 27144
 
-    sequence_chunks = sorted(sequence_chunks, key=lambda element: (element[1], element[2]))
-    contig, contig_start, contig_end, sequence = alignment_stitch(sequence_chunks)
-
-    return sequence
+    return all_candidates

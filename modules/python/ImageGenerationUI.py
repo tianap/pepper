@@ -30,7 +30,8 @@ class UserInterfaceView:
         self.fasta_handler = PEPPER.FASTA_handler(draft_file_path)
         self.train_mode = train_mode
         self.downsample_rate = 1.0
-        self.truth_bam_handler = None
+        self.truth_bam_handler_h1 = None
+        self.truth_bam_handler_h2 = None
 
         if self.train_mode:
             self.truth_bam_handler_h1 = PEPPER.BAM_handler(truth_bam_h1)
