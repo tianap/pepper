@@ -51,7 +51,7 @@ class VCFWriter:
         return alts
 
     def write_vcf_records(self, chromosome_name, called_variants):
-        for pos in called_variants.keys():
+        for pos in sorted(called_variants.keys()):
             ref, allele_1, allele_2 = called_variants[pos][0]
             ref, alt_alleles, gt = self.get_genotype(ref, allele_1, allele_2)
 
