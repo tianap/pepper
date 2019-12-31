@@ -8,9 +8,9 @@ Candidate = collections.namedtuple('Candidate', 'chromosome_name pos_start pos_e
 
 
 class VCFWriter:
-    def __init__(self, reference_path, sample_name, output_dir):
+    def __init__(self, reference_path, sample_name, output_dir, contigs):
         self.fasta_handler = PEPPER.FASTA_handler(reference_path)
-        vcf_header = self.get_vcf_header(sample_name)
+        vcf_header = self.get_vcf_header(sample_name, contigs)
         time_str = time.strftime("%m%d%Y_%H%M%S")
 
         self.vcf_file = VariantFile(output_dir + "CANDIDATES_PEPPER" + '_' + time_str + '.vcf', 'w', header=vcf_header)
@@ -61,11 +61,11 @@ class VCFWriter:
             alleles = tuple([ref]) + tuple(alt_alleles)
             # print(str(chrm), st_pos, end_pos, qual, rec_filter, alleles, genotype, gq)
             vcf_record = self.vcf_file.new_record(contig=str(chromosome_name), start=pos,
-                                                  stop=pos, id='.', qual=60,
+                                                  stop=pos+1, id='.', qual=60,
                                                   filter='PASS', alleles=alleles, GT=gt, GQ=60)
             self.vcf_file.write(vcf_record)
 
-    def get_vcf_header(self, sample_name):
+    def get_vcf_header(self, sample_name, contigs):
         header = VariantHeader()
         items = [('ID', "PASS"),
                  ('Description', "All filters passed")]
@@ -95,6 +95,8 @@ class VCFWriter:
         sqs = self.fasta_handler.get_chromosome_names()
 
         for sq in sqs:
+            if sq not in contigs:
+                continue
             sq_id = sq
             ln = self.fasta_handler.get_chromosome_sequence_length(sq)
             items = [('ID', sq_id),

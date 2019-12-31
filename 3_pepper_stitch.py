@@ -11,7 +11,7 @@ def perform_stitch(hdf_file_path, reference_path, output_path, threads, sample_n
     with h5py.File(hdf_file_path, 'r') as hdf5_file:
         contigs = list(hdf5_file['predictions'].keys())
 
-    vcf_file = VCFWriter(reference_path, sample_name, output_path)
+    vcf_file = VCFWriter(reference_path, sample_name, output_path, contigs)
 
     for contig in contigs:
         sys.stderr.write(TextColor.YELLOW + "INFO: PROCESSING CONTIG: " + contig + "\n" + TextColor.END)
