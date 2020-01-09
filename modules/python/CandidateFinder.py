@@ -14,6 +14,7 @@ import re
 
 BASE_ERROR_RATE = 0.0
 label_decoder = {1: 'A', 2: 'C', 3: 'G', 4: 'T', 0: ''}
+label_decoder_snp = {1: 'A', 2: 'C', 3: 'G', 4: 'T', 0: '*'}
 MATCH_PENALTY = 4
 MISMATCH_PENALTY = 6
 GAP_PENALTY = 8
@@ -165,25 +166,115 @@ def alignment_stitch(sequence_chunks):
     return contig, running_start, running_end, running_sequence
 
 
-def small_chunk_stitch(file_name, contig, small_chunk_keys):
+def get_candidates(reference_sequence, read_sequence, start_pos, end_pos, hp_tag):
+    aligner = PEPPER.Aligner(MATCH_PENALTY, MISMATCH_PENALTY, GAP_PENALTY, GAP_EXTEND_PENALTY)
+    alignment_filter = PEPPER.Filter()
+    alignment = PEPPER.Alignment()
+    aligner.SetReferenceSequence(reference_sequence, len(reference_sequence))
+    aligner.Align_cpp(read_sequence, alignment_filter, alignment, 0)
+
+    cigar_string = alignment.cigar_string.replace('=', 'M')
+    cigar_tuples = re.findall(r'(\d+)(\w)', cigar_string)
+    read_index = 0
+    ref_index = alignment.reference_begin
+    ref_pos = start_pos + alignment.reference_begin
+
+    candidate_list = []
+    # group the matches together
+    for tup_i, (cigar_len, cigar_op) in enumerate(cigar_tuples):
+        cigar_len = int(cigar_len)
+        # soft clip
+        if cigar_op == 'S':
+            read_index += cigar_len
+        # match
+        elif cigar_op == 'M':
+            for i in range(0, cigar_len):
+                # look forward if the next operation is an insert or delete
+                if i == cigar_len - 1 and tup_i < len(cigar_tuples) - 1:
+                    if cigar_tuples[tup_i+1][1] == 'I' or cigar_tuples[tup_i+1][1] == 'D':
+                        read_index += 1
+                        ref_index += 1
+                        ref_pos += 1
+                        continue
+
+                ref_base = reference_sequence[ref_index]
+                read_base = read_sequence[read_index]
+                if ref_base != read_base:
+                    # start_pos, end_pos, ref_allele, read_allele, type[0: snp, 1: IN, 2: del]
+                    candidate_list.append((ref_pos, ref_pos + 1, ref_base, read_base, 0))
+                read_index += 1
+                ref_index += 1
+                ref_pos += 1
+        # mismatch
+        elif cigar_op == 'X':
+            for i in range(0, cigar_len):
+                # look forward if the next operation is an insert or delete
+                if i == cigar_len - 1 and tup_i < len(cigar_tuples) - 1:
+                    if cigar_tuples[tup_i+1][1] == 'I' or cigar_tuples[tup_i+1][1] == 'D':
+                        read_index += 1
+                        ref_index += 1
+                        ref_pos += 1
+                        continue
+
+                ref_base = reference_sequence[ref_index]
+                read_base = read_sequence[read_index]
+                if ref_base != read_base:
+                    # start_pos, end_pos, ref_allele, read_allele, type[0: snp, 1: IN, 2: del]
+                    candidate_list.append((ref_pos, ref_pos + 1, ref_base, read_base, hp_tag, 'SNP'))
+                read_index += 1
+                ref_index += 1
+                ref_pos += 1
+        # insert
+        elif cigar_op == 'I':
+            if ref_index > 0 and read_index > 0:
+                ref_allele = reference_sequence[ref_index - 1]
+                insert_allele = read_sequence[read_index - 1]
+                for i in range(0, cigar_len):
+                    insert_allele = insert_allele + read_sequence[read_index]
+                    read_index += 1
+
+                # start_pos, end_pos, ref_allele, read_allele, type[0: snp, 1: IN, 2: del]
+                candidate_list.append((ref_pos - 1, ref_pos - 1, ref_allele, insert_allele, hp_tag, 'IN'))
+            else:
+                read_index += cigar_len
+
+        # delete
+        elif cigar_op == 'D':
+            if ref_index > 0 and read_index > 0:
+                ref_allele = reference_sequence[ref_index - 1]
+                delete_allele = read_sequence[read_index - 1]
+                start_pos = ref_pos - 1
+                for i in range(0, cigar_len):
+                    ref_allele = ref_allele + reference_sequence[ref_index]
+                    ref_index += 1
+                    ref_pos += 1
+                candidate_list.append((start_pos, start_pos + cigar_len + 1, ref_allele, delete_allele, hp_tag, 'DEL'))
+            else:
+                ref_index += cigar_len
+                ref_pos += cigar_len
+        else:
+            print("UNDEFINED CIGAR: ", cigar_op, cigar_len)
+    return candidate_list
+
+
+def small_chunk_stitch(file_name, reference_file_path, contig, small_chunk_keys):
     # for chunk_key in small_chunk_keys:
     name_sequence_tuples_h1 = list()
     name_sequence_tuples_h2 = list()
+    fasta_handler = PEPPER.FASTA_handler(reference_file_path)
+
+    all_positions = set()
+    base_prediction_dict_h1 = defaultdict()
+    base_prediction_dict_h2 = defaultdict()
+    highest_index_per_pos = defaultdict(lambda: 0)
 
     for contig_name, _st, _end in small_chunk_keys:
         chunk_name = contig_name + '-' + str(_st) + '-' + str(_end)
 
         with h5py.File(file_name, 'r') as hdf5_file:
-            contig_start = hdf5_file['predictions'][contig][chunk_name]['contig_start'][()]
-            contig_end = hdf5_file['predictions'][contig][chunk_name]['contig_end'][()]
-
-        with h5py.File(file_name, 'r') as hdf5_file:
             smaller_chunks = set(hdf5_file['predictions'][contig][chunk_name].keys()) - {'contig_start', 'contig_end'}
 
         smaller_chunks = sorted(smaller_chunks)
-        all_positions = set()
-        base_prediction_dict_h1 = defaultdict()
-        base_prediction_dict_h2 = defaultdict()
 
         for chunk in smaller_chunks:
             with h5py.File(file_name, 'r') as hdf5_file:
@@ -203,25 +294,29 @@ def small_chunk_stitch(file_name, contig, small_chunk_keys):
                     base_prediction_dict_h1[(pos, indx)] = base_pred_h1
                     base_prediction_dict_h2[(pos, indx)] = base_pred_h2
                     all_positions.add((pos, indx))
+                    highest_index_per_pos[pos] = max(highest_index_per_pos[pos], indx)
 
-        pos_list = sorted(list(all_positions), key=lambda element: (element[0], element[1]))
-        dict_fetch = operator.itemgetter(*pos_list)
-        predicted_base_labels_h1 = list(dict_fetch(base_prediction_dict_h1))
-        predicted_base_labels_h2 = list(dict_fetch(base_prediction_dict_h2))
-        sequence_h1 = ''.join([label_decoder[base] for base in predicted_base_labels_h1])
-        sequence_h2 = ''.join([label_decoder[base] for base in predicted_base_labels_h2])
-        name_sequence_tuples_h1.append((contig, contig_start, contig_end, sequence_h1))
-        name_sequence_tuples_h2.append((contig, contig_start, contig_end, sequence_h2))
+    all_positions = sorted(all_positions)
+    start_pos, end_pos = all_positions[0][0], all_positions[-1][0]
 
-    name_sequence_tuples_h1 = sorted(name_sequence_tuples_h1, key=lambda element: (element[1], element[2]))
-    name_sequence_tuples_h2 = sorted(name_sequence_tuples_h2, key=lambda element: (element[1], element[2]))
+    reference_sequence = fasta_handler.get_reference_sequence(contig,
+                                                              start_pos,
+                                                              end_pos + 1)
 
-    contig, running_start, running_end, running_sequence_h1 = alignment_stitch(name_sequence_tuples_h1)
-    contig, running_start, running_end, running_sequence_h2 = alignment_stitch(name_sequence_tuples_h2)
-    return contig, running_start, running_end, running_sequence_h1, running_sequence_h2
+    pos_list = sorted(list(all_positions), key=lambda element: (element[0], element[1]))
+    dict_fetch = operator.itemgetter(*pos_list)
+    predicted_base_labels_h1 = list(dict_fetch(base_prediction_dict_h1))
+    predicted_base_labels_h2 = list(dict_fetch(base_prediction_dict_h2))
+    sequence_h1 = ''.join([label_decoder[base] for base in predicted_base_labels_h1])
+    sequence_h2 = ''.join([label_decoder[base] for base in predicted_base_labels_h2])
+
+    candidates_h1 = get_candidates(reference_sequence, sequence_h1, start_pos, end_pos, hp_tag=1)
+    candidates_h2 = get_candidates(reference_sequence, sequence_h2, start_pos, end_pos, hp_tag=2)
+
+    return contig, start_pos, end_pos, candidates_h1, candidates_h2
 
 
-def create_consensus_sequence(hdf5_file_path, contig, sequence_chunk_keys, threads):
+def find_candidates(hdf5_file_path,  reference_file_path, contig, sequence_chunk_keys, threads):
     sequence_chunk_keys = sorted(sequence_chunk_keys)
     sequence_chunk_key_list = list()
     for sequence_chunk_key in sequence_chunk_keys:
@@ -230,26 +325,28 @@ def create_consensus_sequence(hdf5_file_path, contig, sequence_chunk_keys, threa
 
     sequence_chunk_key_list = sorted(sequence_chunk_key_list, key=lambda element: (element[1], element[2]))
 
-    sequence_chunks_h1 = list()
-    sequence_chunks_h2 = list()
+    candidate_positional_map = defaultdict(set)
+    all_candidates = set()
     # generate the dictionary in parallel
     with concurrent.futures.ProcessPoolExecutor(max_workers=threads) as executor:
         file_chunks = chunks(sequence_chunk_key_list, max(MIN_SEQUENCE_REQUIRED_FOR_MULTITHREADING,
                                                           int(len(sequence_chunk_key_list) / threads) + 1))
 
-        futures = [executor.submit(small_chunk_stitch, hdf5_file_path, contig, file_chunk) for file_chunk in file_chunks]
+        futures = [executor.submit(small_chunk_stitch, hdf5_file_path, reference_file_path, contig, file_chunk)
+                   for file_chunk in file_chunks]
         for fut in concurrent.futures.as_completed(futures):
             if fut.exception() is None:
-                contig, contig_start, contig_end, sequence_h1, sequence_h2 = fut.result()
-                sequence_chunks_h1.append((contig, contig_start, contig_end, sequence_h1))
-                sequence_chunks_h2.append((contig, contig_start, contig_end, sequence_h2))
+                contig, contig_start, contig_end, candidates_h1, candidates_h2 = fut.result()
+                for candidate in candidates_h1:
+                    all_candidates.add(candidate)
+                    candidate_positional_map[candidate[0]].add(candidate)
+                for candidate in candidates_h2:
+                    all_candidates.add(candidate)
+                    candidate_positional_map[candidate[0]].add(candidate)
             else:
                 sys.stderr.write("ERROR: " + str(fut.exception()) + "\n")
             fut._result = None  # python issue 27144
 
-    sequence_chunks_h1 = sorted(sequence_chunks_h1, key=lambda element: (element[1], element[2]))
-    sequence_chunks_h2 = sorted(sequence_chunks_h2, key=lambda element: (element[1], element[2]))
-    contig, contig_start, contig_end, sequence_h1 = alignment_stitch(sequence_chunks_h1)
-    contig, contig_start, contig_end, sequence_h2 = alignment_stitch(sequence_chunks_h2)
+    all_candidates = list(sorted(all_candidates, key=lambda element: (element[1], element[2])))
 
-    return sequence_h1, sequence_h2
+    return all_candidates, candidate_positional_map

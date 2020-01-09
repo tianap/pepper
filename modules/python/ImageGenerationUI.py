@@ -14,7 +14,7 @@ class UserInterfaceView:
     """
     Process manager that runs sequence of processes to generate images and their labels.
     """
-    def __init__(self, chromosome_name, bam_file_path, draft_file_path, truth_bam, train_mode):
+    def __init__(self, chromosome_name, bam_file_path, draft_file_path, truth_bam_h1, truth_bam_h2, train_mode):
         """
         Initialize a manager object
         :param chromosome_name: Name of the chromosome
@@ -30,10 +30,12 @@ class UserInterfaceView:
         self.fasta_handler = PEPPER.FASTA_handler(draft_file_path)
         self.train_mode = train_mode
         self.downsample_rate = 1.0
-        self.truth_bam_handler = None
+        self.truth_bam_handler_h1 = None
+        self.truth_bam_handler_h2 = None
 
         if self.train_mode:
-            self.truth_bam_handler = PEPPER.BAM_handler(truth_bam)
+            self.truth_bam_handler_h1 = PEPPER.BAM_handler(truth_bam_h1)
+            self.truth_bam_handler_h2 = PEPPER.BAM_handler(truth_bam_h2)
 
         # --- initialize names ---
         # name of the chromosome
@@ -53,7 +55,8 @@ class UserInterfaceView:
                                                    start_position,
                                                    end_position)
 
-        images, lables, positions, image_chunk_ids = alignment_summarizer.create_summary(self.truth_bam_handler,
+        images, lables, positions, image_chunk_ids = alignment_summarizer.create_summary(self.truth_bam_handler_h1,
+                                                                                         self.truth_bam_handler_h2,
                                                                                          self.train_mode)
 
         return images, lables, positions, image_chunk_ids
@@ -137,12 +140,13 @@ class UserInterfaceSupport:
 
     @staticmethod
     def single_worker(args, _start, _end):
-        chr_name, bam_file, draft_file, truth_bam, train_mode = args
+        chr_name, bam_file, draft_file, truth_bam_h1, truth_bam_h2, train_mode = args
 
         view = UserInterfaceView(chromosome_name=chr_name,
                                  bam_file_path=bam_file,
                                  draft_file_path=draft_file,
-                                 truth_bam=truth_bam,
+                                 truth_bam_h1=truth_bam_h1,
+                                 truth_bam_h2=truth_bam_h2,
                                  train_mode=train_mode)
 
         images, labels, positions, image_chunk_ids = view.parse_region(_start, _end)
@@ -154,7 +158,7 @@ class UserInterfaceSupport:
     def image_generator(args, all_intervals, total_threads, thread_id):
         thread_prefix = "[THREAD " + "{:02d}".format(thread_id) + "]"
 
-        output_path, bam_file, draft_file, truth_bam, train_mode = args
+        output_path, bam_file, draft_file, truth_bam_h1, truth_bam_h2, train_mode = args
         file_name = output_path + "pepper_images_thread_" + str(thread_id) + ".hdf"
 
         intervals = [r for i, r in enumerate(all_intervals) if i % total_threads == thread_id]
@@ -169,14 +173,13 @@ class UserInterfaceSupport:
         with DataStore(file_name, 'w') as output_hdf_file:
             for counter, interval in enumerate(intervals):
                 chr_name, _start, _end = interval
-                img_args = (chr_name, bam_file, draft_file, truth_bam, train_mode)
+                img_args = (chr_name, bam_file, draft_file, truth_bam_h1, truth_bam_h2, train_mode)
                 images, labels, positions, chunk_ids, region = UserInterfaceSupport.single_worker(img_args, _start, _end)
 
                 for i, image in enumerate(images):
                     label = labels[i]
                     position, index = zip(*positions[i])
                     chunk_id = chunk_ids[i]
-
                     summary_name = str(region[0]) + "_" + str(region[1]) + "_" + str(region[2]) + "_" + str(chunk_id)
 
                     output_hdf_file.write_summary(region, image, label, position, index, chunk_id, summary_name)
@@ -199,7 +202,8 @@ class UserInterfaceSupport:
     def chromosome_level_parallelization(chr_list,
                                          bam_file,
                                          draft_file,
-                                         truth_bam,
+                                         truth_bam_h1,
+                                         truth_bam_h2,
                                          output_path,
                                          total_threads,
                                          train_mode):
@@ -232,7 +236,7 @@ class UserInterfaceSupport:
                          + " TOTAL INTERVALS: " + str(len(all_intervals)) + "\n" + TextColor.END)
         sys.stderr.flush()
 
-        args = (output_path, bam_file, draft_file, truth_bam, train_mode)
+        args = (output_path, bam_file, draft_file, truth_bam_h1, truth_bam_h2, train_mode)
         with concurrent.futures.ProcessPoolExecutor(max_workers=total_threads) as executor:
             futures = [executor.submit(UserInterfaceSupport.image_generator, args, all_intervals, total_threads, thread_id)
                        for thread_id in range(0, total_threads)]

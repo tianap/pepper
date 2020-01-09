@@ -16,14 +16,19 @@ def perform_stitch(hdf_file_path, output_path, threads):
         with h5py.File(hdf_file_path, 'r') as hdf5_file:
             chunk_keys = sorted(hdf5_file['predictions'][contig].keys())
 
-        consensus_sequence = create_consensus_sequence(hdf_file_path, contig, chunk_keys, threads)
+        consensus_sequence_h1, consensus_sequence_h2 = create_consensus_sequence(hdf_file_path, contig, chunk_keys, threads)
         sys.stderr.write(TextColor.BLUE + "INFO: FINISHED PROCESSING " + contig + ", POLISHED SEQUENCE LENGTH: "
-                         + str(len(consensus_sequence)) + ".\n" + TextColor.END)
+                         + str(len(consensus_sequence_h1)) + " " + str(len(consensus_sequence_h2))
+                         + ".\n" + TextColor.END)
 
         # TODO: I should write a FASTA handler here. This is too sloppy.
-        if consensus_sequence is not None and len(consensus_sequence) > 0:
-            consensus_fasta_file.write('>' + contig + "\n")
-            consensus_fasta_file.write(consensus_sequence+"\n")
+        if consensus_sequence_h1 is not None and len(consensus_sequence_h1) > 0:
+            consensus_fasta_file.write('>' + contig + "_h1\n")
+            consensus_fasta_file.write(consensus_sequence_h1+"\n")
+
+        if consensus_sequence_h2 is not None and len(consensus_sequence_h2) > 0:
+            consensus_fasta_file.write('>' + contig + "_h2\n")
+            consensus_fasta_file.write(consensus_sequence_h2+"\n")
 
     hdf5_file.close()
 

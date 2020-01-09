@@ -21,6 +21,7 @@ Return:
 - A trained model
 """
 CLASS_WEIGHTS = [1.0, 1.0, 1.0, 1.0, 1.0]
+decode_labels = {0: '*', 1: 'A', 2: 'C', 3: 'G', 4: 'T'}
 
 
 def save_best_model(transducer_model, model_optimizer, hidden_size, layers, epoch,
@@ -139,30 +140,53 @@ def train(train_file, test_file, batch_size, epoch_limit, gpu_mode, num_workers,
                     images = images.cuda()
                     labels = labels.cuda()
 
-                hidden = torch.zeros(images.size(0), 2 * TrainOptions.GRU_LAYERS, TrainOptions.HIDDEN_SIZE)
+                hidden_h1 = torch.zeros(images.size(0), 2 * TrainOptions.GRU_LAYERS, TrainOptions.HIDDEN_SIZE)
+                hidden_h2 = torch.zeros(images.size(0), 2 * TrainOptions.GRU_LAYERS, TrainOptions.HIDDEN_SIZE)
 
                 if gpu_mode:
-                    hidden = hidden.cuda()
+                    hidden_h1 = hidden.cuda()
+                    hidden_h2 = hidden.cuda()
 
                 for i in range(0, ImageSizeOptions.SEQ_LENGTH, TrainOptions.WINDOW_JUMP):
                     model_optimizer.zero_grad()
                     if i + TrainOptions.TRAIN_WINDOW > ImageSizeOptions.SEQ_LENGTH:
                         break
 
-                    image_chunk = images[:, i:i+TrainOptions.TRAIN_WINDOW]
-                    label_chunk = labels[:, i:i+TrainOptions.TRAIN_WINDOW]
+                    image_chunk_h  = images[:, 0, i:i+TrainOptions.TRAIN_WINDOW]
+                    image_chunk_h1 = images[:, 1, i:i+TrainOptions.TRAIN_WINDOW]
+                    image_chunk_h2 = images[:, 2, i:i+TrainOptions.TRAIN_WINDOW]
+                    label_chunk_h1 = labels[:, 0, i:i+TrainOptions.TRAIN_WINDOW]
+                    label_chunk_h2 = labels[:, 1, i:i+TrainOptions.TRAIN_WINDOW]
 
-                    output_, hidden = transducer_model(image_chunk, hidden)
+                    hap_1_tensor = torch.cat((image_chunk_h1, image_chunk_h2), 2)
+                    hap_2_tensor = torch.cat((image_chunk_h2, image_chunk_h1), 2)
 
-                    loss = criterion(output_.contiguous().view(-1, num_classes), label_chunk.contiguous().view(-1))
+                    # print()
+                    # image_chunk_h = hap_1_tensor[0, :, :]
+                    # print(image_chunk_h.size())
+                    # for i, row in enumerate(image_chunk_h):
+                    #     print("%c"%decode_labels[int(label_chunk_h1[0][i].item())], end='')
+                    #     for item in row:
+                    #         print("%5d"%item.item(), end='')
+                    #     print()
+                    # print()
+                    # exit()
+
+                    out_h1, out_h2, hidden_h1, hidden_h2 = \
+                        transducer_model(hap_1_tensor, hap_2_tensor, hidden_h1, hidden_h2)
+
+                    h1_loss = criterion(out_h1.contiguous().view(-1, num_classes), label_chunk_h1.contiguous().view(-1))
+                    h2_loss = criterion(out_h2.contiguous().view(-1, num_classes), label_chunk_h2.contiguous().view(-1))
+                    loss = h1_loss + h2_loss
 
                     loss.backward()
                     model_optimizer.step()
 
                     total_loss += loss.item()
-                    total_images += image_chunk.size(0)
+                    total_images += image_chunk_h.size(0)
 
-                    hidden = hidden.detach()
+                    hidden_h1 = hidden_h1.detach()
+                    hidden_h2 = hidden_h2.detach()
 
                 # update the progress bar
                 avg_loss = (total_loss / total_images) if total_images else 0
@@ -179,9 +203,10 @@ def train(train_file, test_file, batch_size, epoch_limit, gpu_mode, num_workers,
         stats_dictioanry = test(test_file, batch_size, gpu_mode, transducer_model, num_workers,
                                 gru_layers, hidden_size, num_classes=ImageSizeOptions.TOTAL_LABELS)
         stats['loss'] = stats_dictioanry['loss']
-        stats['accuracy'] = stats_dictioanry['accuracy']
+        stats['accuracy_h1'] = stats_dictioanry['accuracy_h1']
+        stats['accuracy_h2'] = stats_dictioanry['accuracy_h2']
         stats['loss_epoch'].append((epoch, stats_dictioanry['loss']))
-        stats['accuracy_epoch'].append((epoch, stats_dictioanry['accuracy']))
+        stats['accuracy_epoch'].append((epoch, stats_dictioanry['accuracy_h1']))
 
         lr_scheduler.step(stats['loss'])
 
@@ -193,8 +218,10 @@ def train(train_file, test_file, batch_size, epoch_limit, gpu_mode, num_workers,
             save_best_model(transducer_model, model_optimizer,
                             hidden_size, gru_layers, epoch, model_dir + "_epoch_" + str(epoch + 1) + '_checkpoint.pkl')
 
-            test_loss_logger.write(str(epoch + 1) + "," + str(stats['loss']) + "," + str(stats['accuracy']) + "\n")
-            confusion_matrix_logger.write(str(epoch + 1) + "\n" + str(stats_dictioanry['confusion_matrix']) + "\n")
+            test_loss_logger.write(str(epoch + 1) + "," + str(stats['loss']) + "," + str(stats['accuracy_h1'])
+                                   + "," + str(stats['accuracy_h2']) + "\n")
+            confusion_matrix_logger.write(str(epoch + 1) + "\n" + str(stats_dictioanry['confusion_matrix_h1']) + "\n" +
+                                          str(stats_dictioanry['confusion_matrix_h2'])+ "\n")
             train_loss_logger.flush()
             test_loss_logger.flush()
             confusion_matrix_logger.flush()

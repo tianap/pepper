@@ -50,6 +50,7 @@ void SummaryGenerator::iterate_over_read(type_read read, long long region_start,
     int cigar_index = 0;
     int base_quality = 0;
     long long reference_index;
+    int hp_tag = read.hp_tag;
 
     for (auto &cigar: read.cigar_tuples) {
         if (ref_position > region_end) break;
@@ -69,10 +70,17 @@ void SummaryGenerator::iterate_over_read(type_read read, long long region_start,
                     if (ref_position >= ref_start && ref_position <= ref_end) {
                         char base = read.sequence[read_index];
 
-                        // update the summary of base
-                        base_summaries[make_pair(ref_position, get_feature_index(base, read.flags.is_reverse))] += 1.0;
-                        coverage[ref_position] += 1.0;
+                        // update the summary of base, hp_tag not present
+                        Position p(ref_position, 0, get_feature_index(base, read.flags.is_reverse));
+                        summaries[p] += 1.0;
+                        coverage[make_pair(ref_position, 0)] += 1.0;
 
+                        // update the summary of base if hp_tag is present
+                        if(hp_tag != 0) {
+                            Position ph(ref_position, 0, get_feature_index(base, read.flags.is_reverse), hp_tag);
+                            summaries[ph] += 1.0;
+                            coverage[make_pair(ref_position, hp_tag)] += 1.0;
+                        }
                     }
                     read_index += 1;
                     ref_position += 1;
@@ -89,10 +97,17 @@ void SummaryGenerator::iterate_over_read(type_read read, long long region_start,
                     alt = read.sequence.substr(read_index, cigar.length);
                     for (int i = 0; i < cigar.length; i++) {
                         pair<long long, int> position_pair = make_pair(ref_position - 1, i);
-                        insert_summaries[make_pair(position_pair, get_feature_index(alt[i], read.flags.is_reverse))] += 1.0;
+                        Position p(ref_position - 1, i+1, get_feature_index(alt[i], read.flags.is_reverse));
+                        summaries[p] += 1.0;
+
+                        // update the summary of base if hp_tag is present
+                        if(hp_tag != 0) {
+                            Position ph(ref_position - 1, i+1, get_feature_index(alt[i], read.flags.is_reverse), hp_tag);
+                            summaries[ph] += 1.0;
+                        }
                     }
                     longest_insert_count[ref_position - 1] = std::max(longest_insert_count[ref_position - 1],
-                                                                      (long long) alt.length());
+                                                                      (int) alt.length());
                 }
                 read_index += cigar.length;
                 break;
@@ -105,8 +120,16 @@ void SummaryGenerator::iterate_over_read(type_read read, long long region_start,
                 for (int i = 0; i < cigar.length; i++) {
                     if (ref_position + i >= ref_start && ref_position + i <= ref_end) {
                         // update the summary of base
-                        base_summaries[make_pair(ref_position + i, get_feature_index('*', read.flags.is_reverse))] += 1.0;
-                        coverage[ref_position] += 1.0;
+                        Position p(ref_position + i, 0, get_feature_index('*', read.flags.is_reverse));
+                        summaries[p] += 1.0;
+                        coverage[make_pair(ref_position, 0)] += 1.0;
+
+                        // update the summary of base if hp_tag is present
+                        if(hp_tag != 0) {
+                            Position ph(ref_position + i, 0, get_feature_index('*', read.flags.is_reverse), hp_tag);
+                            summaries[ph] += 1.0;
+                            coverage[make_pair(ref_position + i, hp_tag)] += 1.0;
+                        }
                     }
                 }
                 ref_position += cigar.length;
@@ -139,7 +162,7 @@ bool check_base(char base) {
     return false;
 }
 
-void SummaryGenerator::generate_labels(type_read read, long long region_start, long long region_end) {
+void SummaryGenerator::generate_labels(type_read read, int hp_tag, long long region_start, long long region_end) {
     int read_index = 0;
     long long ref_position = read.pos;
     int cigar_index = 0;
@@ -163,7 +186,8 @@ void SummaryGenerator::generate_labels(type_read read, long long region_start, l
 //                    cout<<ref_position<<" "<<ref_end<<" "<<region_end<<endl;
                     if (ref_position >= ref_start && ref_position <= ref_end) {
                         char base = read.sequence[read_index];
-                        base_labels[ref_position] = base;
+                        Position p(ref_position, 0, 0, hp_tag);
+                        label_map[p] = base;
                     }
                     read_index += 1;
                     ref_position += 1;
@@ -182,8 +206,8 @@ void SummaryGenerator::generate_labels(type_read read, long long region_start, l
                         if (i < alt.length()) {
                             base = alt[i];
                         }
-                        pair<long long, int> position_pair = make_pair(ref_position - 1, i);
-                        insert_labels[position_pair] = base;
+                        Position ph(ref_position - 1, i+1, 0, hp_tag);
+                        label_map[ph] = base;
                     }
                 }
                 read_index += cigar.length;
@@ -199,7 +223,8 @@ void SummaryGenerator::generate_labels(type_read read, long long region_start, l
                         if (ref_position + i >= ref_start && ref_position + i <= ref_end) {
                             // DELETE
                             char base = '*';
-                            base_labels[ref_position + i] = '*';
+                            Position ph(ref_position + i, 0, 0, hp_tag);
+                            label_map[ph] = '*';
                         }
                     }
                 }
@@ -216,93 +241,115 @@ void SummaryGenerator::generate_labels(type_read read, long long region_start, l
 
 
 void SummaryGenerator::debug_print(long long start_pos, long long end_pos) {
-    cout << setprecision(3);
-    for (int i = start_pos; i <= end_pos; i++) {
-        if(i==start_pos) cout<<"REF:\t";
-        cout << "  " << reference_sequence[i - start_pos] << "\t";
-        if (longest_insert_count[i] > 0) {
-            for (int ii = 0; ii < longest_insert_count[i]; ii++)cout << "  *" << "\t";
-        }
-    }
-    cout << endl;
-    for (int i = start_pos; i <= end_pos; i++) {
-        if(i==start_pos) cout<<"TRH:\t";
-        cout << "  " <<base_labels[i] << "\t";
-        if (longest_insert_count[i] > 0) {
-            for (int ii = 0; ii < longest_insert_count[i]; ii++) {
-                if (insert_labels[make_pair(i, ii)]) cout << "  "<< insert_labels[make_pair(i, ii)] << "\t";
-                else cout << "  *" << "\t";
+    for (int hp_tag = 0; hp_tag < 3; hp_tag++) {
+        cout<<"HP TAG: "<< hp_tag <<endl;
+        cout << setprecision(3);
+        for (int i = start_pos; i <= end_pos; i++) {
+            if (i == start_pos) cout << "REF:\t";
+            cout << "  " << reference_sequence[i - start_pos] << "\t";
+            if (longest_insert_count[i] > 0) {
+                for (int ii = 0; ii < longest_insert_count[i]; ii++)cout << "  *" << "\t";
             }
         }
-    }
-    cout << endl;
-    for (int i = 0; i < labels.size(); i++) {
-        if(i==0) cout<<"LBL:\t";
-        printf("%3d\t", labels[i]);
-    }
-    cout << endl;
+        cout << endl;
+        if(hp_tag > 0) {
+            for (int i = start_pos; i <= end_pos; i++) {
+                if (i == start_pos) cout << "TRH:\t";
+                Position p(i, 0, 0, hp_tag);
+                cout << "  " << label_map[p] << "\t";
+                if (longest_insert_count[i] > 0) {
+                    for (int ii = 0; ii < longest_insert_count[i]; ii++) {
+                        Position ph(i, ii + 1, 0, hp_tag);
+                        if (label_map.find(ph) != label_map.end())
+                            cout << "  " << label_map[ph] << "\t";
+                        else cout << "  *" << "\t";
+                    }
+                }
+            }
+            cout << endl;
 
-    cout<<"POS:\t";
-    for (int i = 0; i < genomic_pos.size(); i++) {
+            for (int i = 0; i < labels[hp_tag-1].size(); i++) {
+                if (i == 0) cout << "LBL:\t";
+                printf("%3d\t", labels[hp_tag-1][i]);
+            }
+            cout << endl;
+        }
+
+        cout << "POS:\t";
+        for (int i = 0; i < genomic_pos.size(); i++) {
 
 //        cout << "(" << genomic_pos[i].first << "," << genomic_pos[i].second << ")\t";
-        printf("%3lld\t", (genomic_pos[i].first) % 100);
-    }
-    cout << endl;
-
-    cout << "-------------" << endl;
-    for (int i = 0; i < image[0].size(); i++) {
-        if(i==0)cout<<"AFW:\t";
-        if(i==1)cout<<"CFW:\t";
-        if(i==2)cout<<"GFW:\t";
-        if(i==3)cout<<"TFW:\t";
-        if(i==4)cout<<"ARV:\t";
-        if(i==5)cout<<"CRV:\t";
-        if(i==6)cout<<"GRV:\t";
-        if(i==7)cout<<"TRV:\t";
-        if(i==8)cout<<"GFW:\t";
-        if(i==9)cout<<"GRV:\t";
-
-        for (int j = 0; j < image.size(); j++) {
-            printf("%3d\t", image[j][i]);
+            printf("%3lld\t", (genomic_pos[i].first) % 100);
         }
         cout << endl;
+
+        cout << "-------------" << endl;
+//        print(image.size())
+//        print(image[0].size())
+//        print(image[0][0].size())
+        for (int i = 0; i < image[hp_tag][0].size(); i++) {
+            if (i == 0)cout << "AFW:\t";
+            if (i == 1)cout << "CFW:\t";
+            if (i == 2)cout << "GFW:\t";
+            if (i == 3)cout << "TFW:\t";
+            if (i == 4)cout << "ARV:\t";
+            if (i == 5)cout << "CRV:\t";
+            if (i == 6)cout << "GRV:\t";
+            if (i == 7)cout << "TRV:\t";
+            if (i == 8)cout << "*FW:\t";
+            if (i == 9)cout << "*RV:\t";
+
+            for (int j = 0; j < image[hp_tag].size(); j++) {
+                printf("%3d\t", image[hp_tag][j][i]);
+            }
+            cout << endl;
+        }
+        cout<<"---------------------------------------------------------"<<endl;
     }
 
 }
 
 void SummaryGenerator::generate_image(long long start_pos, long long end_pos) {
     // at this point labels and positions are generated, now generate the pileup
-    for (long long i = start_pos; i <= end_pos; i++) {
-        vector<uint8_t> row;
-        uint8_t pixel_value = 0;
-        // iterate through the summaries
-        for(int j = 0; j <= 9; j++) {
-            pixel_value = (base_summaries[make_pair(i, j)] / max(1.0, coverage[i])) * ImageOptions::MAX_COLOR_VALUE;
-            row.push_back(pixel_value);
-        }
-        assert(row.size() == 10);
-        image.push_back(row);
+    for (int hp_tag = 0; hp_tag < 3; hp_tag++) {
+        vector< vector<uint8_t> > image_hp;
+        for (long long ref_pos = start_pos; ref_pos <= end_pos; ref_pos++) {
+            vector <uint8_t> row;
+            uint8_t pixel_value = 0;
+            // iterate through the summaries
+            for (int feature_index = 0; feature_index <= 9; feature_index++) {
+                Position p(ref_pos, 0, feature_index, hp_tag);
+                pixel_value = 0;
+                if(summaries.find(p) != summaries.end())
+                    pixel_value = (summaries[p] / max(1.0, coverage[make_pair(ref_pos, 0)])) * ImageOptions::MAX_COLOR_VALUE;
+                row.push_back(pixel_value);
+            }
+            assert(row.size() == 10);
+            image_hp.push_back(row);
 
-        if (longest_insert_count[i] > 0) {
+            if (longest_insert_count[ref_pos] > 0) {
 
-            for (int ii = 0; ii < longest_insert_count[i]; ii++) {
-                vector<uint8_t> ins_row;
+                for (int ii = 0; ii < longest_insert_count[ref_pos]; ii++) {
+                    vector <uint8_t> ins_row;
 
-                // iterate through the summaries
-                for(int j = 0; j <= 9; j++) {
-                    if (j >= 0 && j <=9) {
-                        pixel_value = (insert_summaries[make_pair(make_pair(i, ii), j)] /
-                                max(1.0, coverage[i])) * ImageOptions::MAX_COLOR_VALUE ;
+                    // iterate through the summaries
+                    for (int feature_index = 0; feature_index <= 9; feature_index++) {
+                        Position p(ref_pos, ii + 1, feature_index, hp_tag);
+                        pixel_value = 0;
+                        if(summaries.find(p) != summaries.end())
+                            pixel_value = (summaries[p] / max(1.0, coverage[make_pair(ref_pos, 0)])) * ImageOptions::MAX_COLOR_VALUE;
                         ins_row.push_back(pixel_value);
+
                     }
+                    assert(ins_row.size() == 10);
+                    image_hp.push_back(ins_row);
                 }
-                assert(ins_row.size() == 10);
-                image.push_back(ins_row);
             }
         }
+        assert(image_hp.size() == genomic_pos.size());
+        image.push_back(image_hp);
     }
-    assert(image.size() == genomic_pos.size());
+
 }
 
 
@@ -310,60 +357,72 @@ void SummaryGenerator::generate_image(long long start_pos, long long end_pos) {
 void SummaryGenerator::generate_train_summary(vector <type_read> &reads,
                                               long long start_pos,
                                               long long end_pos,
-                                              type_read truth_read) {
-
-
+                                              type_read truth_read_h1,
+                                              type_read truth_read_h2) {
     for (auto &read:reads) {
-        // this populates base_summaries and insert_summaries dictionaries
+        // this populates summaries
         if(read.mapping_quality > 0) {
             iterate_over_read(read, start_pos, end_pos);
         }
     }
 
     // this populates base_labels and insert_labels dictionaries
-    generate_labels(truth_read, start_pos, end_pos + 1);
+    generate_labels(truth_read_h1, 1, start_pos, end_pos + 1);
+    generate_labels(truth_read_h2, 2, start_pos, end_pos + 1);
 
     // after all the dictionaries are populated, we can simply walk through the region and generate a sequence
     for (long long pos = start_pos; pos <= end_pos; pos++) {
-
-        if(coverage[pos] > 0) {
-            labels.push_back(get_labels(base_labels[pos]));
-        } else {
-            labels.push_back(get_labels('*'));
-        }
-
-        // if the label contains anything but ACTG
-        if(!check_base(base_labels[pos])) {
-//            cerr<<"INFO: INVALID REFERENCE BASE INDEX FOUND: ["<<chromosome_name<<":"<<start_pos<<"-"<<end_pos<<"] " <<
-//                pos<<" "<<" "<<base_labels[pos]<<endl;
-            bad_label_positions.push_back(labels.size());
-        }
-
         genomic_pos.push_back(make_pair(pos, 0));
         if (longest_insert_count[pos] > 0) {
             for (int ii = 0; ii < longest_insert_count[pos]; ii++) {
                 genomic_pos.push_back(make_pair(pos, ii + 1));
-                if (insert_labels[make_pair(pos, ii)]) {
-                    labels.push_back(get_labels(insert_labels[make_pair(pos, ii)]));
-
-                    // if the label contains anything but ACTG
-                    if(!check_base(insert_labels[make_pair(pos, ii)])) {
-//                        cerr<<"INFO: INVALID REFERENCE INSERT BASE INDEX FOUND: "<<chromosome_name<<" "<<
-//                            pos<<" "<<insert_labels[make_pair(pos, ii)]<<endl;
-                        bad_label_positions.push_back(labels.size());
-                    }
-                }
-                else labels.push_back(get_labels('#'));
             }
         }
     }
-    bad_label_positions.push_back(labels.size());
-    assert(labels.size() == genomic_pos.size());
+
+    // after all the dictionaries are populated, we can simply walk through the region and generate a sequence
+    for (int hp_tag = 1; hp_tag <=2 ; hp_tag++) {
+        vector<uint8_t> hp_labels;
+        for (long long pos = start_pos; pos <= end_pos; pos++) {
+            Position p(pos, 0, 0, hp_tag);
+            if (coverage[make_pair(pos, hp_tag)] > 0) {
+                hp_labels.push_back(get_labels(label_map[p]));
+            } else {
+                hp_labels.push_back(get_labels('*'));
+            }
+
+            // if the label contains anything but ACTG
+            if (!check_base(label_map[p])) {
+//            cerr<<"INFO: INVALID REFERENCE BASE INDEX FOUND: ["<<chromosome_name<<":"<<start_pos<<"-"<<end_pos<<"] " <<
+//                pos<<" "<<" "<<base_labels[pos]<<endl;
+                bad_label_positions.push_back(hp_labels.size());
+            }
+
+            if (longest_insert_count[pos] > 0) {
+                for (int ii = 0; ii < longest_insert_count[pos]; ii++) {
+                    Position ph(pos, ii+1, 0, hp_tag);
+                    if (label_map.find(ph) != label_map.end()) {
+                        hp_labels.push_back(get_labels(label_map[ph]));
+
+                        // if the label contains anything but ACTG
+                        if (!check_base(label_map[ph])) {
+//                        cerr<<"INFO: INVALID REFERENCE INSERT BASE INDEX FOUND: "<<chromosome_name<<" "<<
+//                            pos<<" "<<insert_labels[make_pair(pos, ii)]<<endl;
+                            bad_label_positions.push_back(labels.size());
+                        }
+                    } else hp_labels.push_back(get_labels('#'));
+                }
+            }
+        }
+        bad_label_positions.push_back(hp_labels.size());
+        assert(hp_labels.size() == genomic_pos.size());
+
+        labels.push_back(hp_labels);
+    }
 
     generate_image(start_pos, end_pos);
 //     at this point everything should be generated
 //    debug_print(start_pos, end_pos);
-//    exit(1);
 }
 
 
@@ -371,7 +430,7 @@ void SummaryGenerator::generate_summary(vector <type_read> &reads,
                                         long long start_pos,
                                         long long end_pos) {
     for (auto &read:reads) {
-        // this populates base_summaries and insert_summaries dictionaries
+        // this populates summaries
         if(read.mapping_quality > 0) {
             iterate_over_read(read, start_pos, end_pos);
         }
@@ -388,6 +447,7 @@ void SummaryGenerator::generate_summary(vector <type_read> &reads,
     }
 
     generate_image(start_pos, end_pos);
-//     at this point everything should be generated
+
+    //at this point everything should be generated
 //    debug_print(start_pos, end_pos);
 }

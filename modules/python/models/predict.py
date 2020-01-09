@@ -55,15 +55,17 @@ def predict(test_file, output_filename, model_path, batch_size, threads, num_wor
             sys.stderr.flush()
             images = images.type(torch.FloatTensor)
             if gpu_mode:
-                # encoder_hidden = encoder_hidden.cuda()
                 images = images.cuda()
 
-            hidden = torch.zeros(images.size(0), 2 * TrainOptions.GRU_LAYERS, TrainOptions.HIDDEN_SIZE)
+            hidden_h1 = torch.zeros(images.size(0), 2 * TrainOptions.GRU_LAYERS, TrainOptions.HIDDEN_SIZE)
+            hidden_h2 = torch.zeros(images.size(0), 2 * TrainOptions.GRU_LAYERS, TrainOptions.HIDDEN_SIZE)
 
             if gpu_mode:
-                hidden = hidden.cuda()
+                hidden_h1 = hidden_h1.cuda()
+                hidden_h2 = hidden_h2.cuda()
 
-            prediction_base_dict = np.zeros((images.size(0), images.size(1), ImageSizeOptions.TOTAL_LABELS))
+            prediction_base_dict_h1 = np.zeros((images.size(0), ImageSizeOptions.SEQ_LENGTH, ImageSizeOptions.TOTAL_LABELS))
+            prediction_base_dict_h2 = np.zeros((images.size(0), ImageSizeOptions.SEQ_LENGTH, ImageSizeOptions.TOTAL_LABELS))
 
             for i in range(0, ImageSizeOptions.SEQ_LENGTH, TrainOptions.WINDOW_JUMP):
                 if i + TrainOptions.TRAIN_WINDOW > ImageSizeOptions.SEQ_LENGTH:
@@ -71,30 +73,53 @@ def predict(test_file, output_filename, model_path, batch_size, threads, num_wor
                 chunk_start = i
                 chunk_end = i + TrainOptions.TRAIN_WINDOW
                 # chunk all the data
-                image_chunk = images[:, chunk_start:chunk_end]
+                image_chunk_h  = images[:, 0, i:i+TrainOptions.TRAIN_WINDOW]
+                image_chunk_h1 = images[:, 1, i:i+TrainOptions.TRAIN_WINDOW]
+                image_chunk_h2 = images[:, 2, i:i+TrainOptions.TRAIN_WINDOW]
+
+                hap_1_tensor = torch.cat((image_chunk_h1, image_chunk_h2), 2)
+                hap_2_tensor = torch.cat((image_chunk_h2, image_chunk_h1), 2)
 
                 # run inference
-                output_base, hidden = transducer_model(image_chunk, hidden)
+                out_h1, out_h2, hidden_h1, hidden_h2 = \
+                    transducer_model(hap_1_tensor, hap_2_tensor, hidden_h1, hidden_h2)
 
                 # do softmax and get prediction
                 m = nn.Softmax(dim=2)
-                soft_probs = m(output_base)
-                output_preds = soft_probs.cpu()
-                base_max_value, predicted_base_label = torch.max(output_preds, dim=2)
+                soft_probs_h1 = m(out_h1)
+                output_preds_h1 = soft_probs_h1.cpu()
+                base_max_value_h1, predicted_base_label_h1 = torch.max(output_preds_h1, dim=2)
+
+                # do softmax and get prediction
+                m = nn.Softmax(dim=2)
+                soft_probs_h2 = m(out_h2)
+                output_preds_h2 = soft_probs_h2.cpu()
+                base_max_value_h2, predicted_base_label_h2 = torch.max(output_preds_h2, dim=2)
 
                 # convert everything to list
-                base_max_value = base_max_value.numpy().tolist()
-                predicted_base_label = predicted_base_label.numpy().tolist()
+                base_max_value_h1 = base_max_value_h1.numpy().tolist()
+                base_max_value_h2 = base_max_value_h2.numpy().tolist()
+                predicted_base_label_h1 = predicted_base_label_h1.numpy().tolist()
+                predicted_base_label_h2 = predicted_base_label_h2.numpy().tolist()
 
-                assert(len(base_max_value) == len(predicted_base_label))
+                assert(len(base_max_value_h1) == len(predicted_base_label_h1))
+                assert(len(base_max_value_h2) == len(predicted_base_label_h2))
 
-                for ii in range(0, len(predicted_base_label)):
+                for ii in range(0, len(predicted_base_label_h1)):
                     chunk_pos = chunk_start
-                    for p_base, base in zip(base_max_value[ii], predicted_base_label[ii]):
-                        prediction_base_dict[ii][chunk_pos][base] += p_base
+                    for p_base, base in zip(base_max_value_h1[ii], predicted_base_label_h1[ii]):
+                        prediction_base_dict_h1[ii][chunk_pos][base] += p_base
                         chunk_pos += 1
-            predicted_base_labels = np.argmax(np.array(prediction_base_dict), axis=2)
+
+                for ii in range(0, len(predicted_base_label_h2)):
+                    chunk_pos = chunk_start
+                    for p_base, base in zip(base_max_value_h2[ii], predicted_base_label_h2[ii]):
+                        prediction_base_dict_h2[ii][chunk_pos][base] += p_base
+                        chunk_pos += 1
+            predicted_base_labels_h1 = np.argmax(np.array(prediction_base_dict_h1), axis=2)
+            predicted_base_labels_h2 = np.argmax(np.array(prediction_base_dict_h2), axis=2)
 
             for i in range(images.size(0)):
                 prediction_data_file.write_prediction(contig[i], contig_start[i], contig_end[i], chunk_id[i],
-                                                      position[i], index[i], predicted_base_labels[i])
+                                                      position[i], index[i], predicted_base_labels_h1[i],
+                                                      predicted_base_labels_h2[i])
