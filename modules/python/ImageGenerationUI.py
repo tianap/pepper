@@ -109,7 +109,6 @@ class UserInterfaceSupport:
 
         split_names = chromosome_names.strip().split(',')
         split_names = [name.strip() for name in split_names]
-        print(split_names)
 
         chromosome_name_list = []
         for name in split_names:
@@ -119,7 +118,7 @@ class UserInterfaceSupport:
                 name_region = name.strip().split(':')
 
                 if len(name_region) != 2:
-                    sys.stderr.write(TextColor.RED + "ERROR: --chromosome_name INVALID value.\n" + TextColor.END)
+                    sys.stderr.write(TextColor.RED + "ERROR: --region INVALID value.\n" + TextColor.END)
                     exit(0)
 
                 name, region = tuple(name_region)
@@ -127,7 +126,7 @@ class UserInterfaceSupport:
                 region = [int(pos) for pos in region]
 
                 if len(region) != 2 or not region[0] <= region[1]:
-                    sys.stderr.write(TextColor.RED + "ERROR: --chromosome_name INVALID value.\n" + TextColor.END)
+                    sys.stderr.write(TextColor.RED + "ERROR: --region INVALID value.\n" + TextColor.END)
                     exit(0)
 
             range_split = name.split('-')
