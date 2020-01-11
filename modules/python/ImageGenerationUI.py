@@ -109,6 +109,7 @@ class UserInterfaceSupport:
 
         split_names = chromosome_names.strip().split(',')
         split_names = [name.strip() for name in split_names]
+        print(split_names)
 
         chromosome_name_list = []
         for name in split_names:
