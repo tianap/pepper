@@ -82,7 +82,7 @@ class UserInterfaceSupport:
         return output_directory
 
     @staticmethod
-    def get_chromosome_list(chromosome_names, ref_file):
+    def get_chromosome_list(chromosome_names, ref_file, region_bed):
         """
         PARSES THROUGH THE CHROMOSOME PARAMETER TO FIND OUT WHICH REGIONS TO PROCESS
         :param chromosome_names: NAME OF CHROMOSOME
@@ -93,6 +93,20 @@ class UserInterfaceSupport:
             fasta_handler = PEPPER.FASTA_handler(ref_file)
             chromosome_names = fasta_handler.get_chromosome_names()
             chromosome_names = ','.join(chromosome_names)
+
+        if region_bed:
+            chromosome_name_list = []
+            with open(region_bed) as fp:
+                line = fp.readline()
+                cnt = 1
+                while line:
+                    line_to_list = line.rstrip().split('\t')
+                    chr_name, start_pos, end_pos = line_to_list[0], int(line_to_list[1]), int(line_to_list[2])
+                    region = sorted([start_pos, end_pos])
+                    chromosome_name_list.append((chr_name, region))
+                    line = fp.readline()
+                cnt += 1
+            return chromosome_name_list
 
         split_names = chromosome_names.strip().split(',')
         split_names = [name.strip() for name in split_names]
@@ -105,7 +119,7 @@ class UserInterfaceSupport:
                 name_region = name.strip().split(':')
 
                 if len(name_region) != 2:
-                    sys.stderr.print(TextColor.RED + "ERROR: --chromosome_name INVALID value.\n" + TextColor.END)
+                    sys.stderr.write(TextColor.RED + "ERROR: --region INVALID value.\n" + TextColor.END)
                     exit(0)
 
                 name, region = tuple(name_region)
@@ -113,7 +127,7 @@ class UserInterfaceSupport:
                 region = [int(pos) for pos in region]
 
                 if len(region) != 2 or not region[0] <= region[1]:
-                    sys.stderr.print(TextColor.RED + "ERROR: --chromosome_name INVALID value.\n" + TextColor.END)
+                    sys.stderr.write(TextColor.RED + "ERROR: --region INVALID value.\n" + TextColor.END)
                     exit(0)
 
             range_split = name.split('-')

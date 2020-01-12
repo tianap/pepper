@@ -56,6 +56,12 @@ if __name__ == '__main__':
         help="Region in [chr_name:start-end] format"
     )
     parser.add_argument(
+        "-rb",
+        "--region_bed",
+        type=str,
+        help="Region in [chr_name:start-end] format"
+    )
+    parser.add_argument(
         "-tm",
         "--train_mode",
         type=boolean_string,
@@ -77,7 +83,7 @@ if __name__ == '__main__':
         help="Number of threads to use. Default is 5."
     )
     FLAGS, unparsed = parser.parse_known_args()
-    chr_list = UserInterfaceSupport.get_chromosome_list(FLAGS.region, FLAGS.draft)
+    chr_list = UserInterfaceSupport.get_chromosome_list(FLAGS.region, FLAGS.draft, FLAGS.region_bed)
 
     if FLAGS.train_mode:
         if not FLAGS.truth_bam_h1 or not FLAGS.truth_bam_h2:
