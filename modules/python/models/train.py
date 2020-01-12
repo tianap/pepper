@@ -144,8 +144,8 @@ def train(train_file, test_file, batch_size, epoch_limit, gpu_mode, num_workers,
                 hidden_h2 = torch.zeros(images.size(0), 2 * TrainOptions.GRU_LAYERS, TrainOptions.HIDDEN_SIZE)
 
                 if gpu_mode:
-                    hidden_h1 = hidden.cuda()
-                    hidden_h2 = hidden.cuda()
+                    hidden_h1 = hidden_h1.cuda()
+                    hidden_h2 = hidden_h2.cuda()
 
                 for i in range(0, ImageSizeOptions.SEQ_LENGTH, TrainOptions.WINDOW_JUMP):
                     model_optimizer.zero_grad()
