@@ -235,7 +235,7 @@ def get_candidates(reference_sequence, read_sequence, start_pos, end_pos, hp_tag
                     read_index += 1
 
                 # start_pos, end_pos, ref_allele, read_allele, type[0: snp, 1: IN, 2: del]
-                candidate_list.append((ref_pos - 1, ref_pos - 1, ref_allele, insert_allele, hp_tag, 'IN'))
+                candidate_list.append((ref_pos - 1, ref_pos - 1 + 1, ref_allele, insert_allele, hp_tag, 'IN'))
             else:
                 read_index += cigar_len
 
