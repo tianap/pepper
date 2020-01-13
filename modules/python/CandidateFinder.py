@@ -20,7 +20,7 @@ MATCH_PENALTY = 4
 MISMATCH_PENALTY = 6
 GAP_PENALTY = 8
 GAP_EXTEND_PENALTY = 2
-MIN_SEQUENCE_REQUIRED_FOR_MULTITHREADING = 2
+MIN_SEQUENCE_REQUIRED_FOR_MULTITHREADING = 1
 
 
 def get_file_paths_from_directory(directory_path):
@@ -262,12 +262,16 @@ def small_chunk_stitch(file_name, reference_file_path, contig, small_chunk_keys)
     # for chunk_key in small_chunk_keys:
     fasta_handler = PEPPER.FASTA_handler(reference_file_path)
     start_time = time.time()
-    all_positions = set()
-    base_prediction_dict_h1 = defaultdict()
-    base_prediction_dict_h2 = defaultdict()
-    highest_index_per_pos = defaultdict(lambda: 0)
 
+    all_candidates_h1 = list()
+    all_candidates_h2 = list()
+    # Find candidates per chunk
     for contig_name, _st, _end in small_chunk_keys:
+        all_positions = set()
+        base_prediction_dict_h1 = defaultdict()
+        base_prediction_dict_h2 = defaultdict()
+        highest_index_per_pos = defaultdict(lambda: 0)
+
         chunk_name = contig_name + '-' + str(_st) + '-' + str(_end)
 
         with h5py.File(file_name, 'r') as hdf5_file:
@@ -295,28 +299,30 @@ def small_chunk_stitch(file_name, reference_file_path, contig, small_chunk_keys)
                     all_positions.add((pos, indx))
                     highest_index_per_pos[pos] = max(highest_index_per_pos[pos], indx)
 
-    all_positions = sorted(all_positions)
-    start_pos, end_pos = all_positions[0][0], all_positions[-1][0]
+        # now find the sequences and find all the candidates
+        all_positions = sorted(all_positions)
+        start_pos, end_pos = all_positions[0][0], all_positions[-1][0]
 
-    reference_sequence = fasta_handler.get_reference_sequence(contig,
-                                                              start_pos,
-                                                              end_pos + 1)
+        reference_sequence = fasta_handler.get_reference_sequence(contig,
+                                                                  start_pos,
+                                                                  end_pos + 1)
 
-    pos_list = sorted(list(all_positions), key=lambda element: (element[0], element[1]))
-    dict_fetch = operator.itemgetter(*pos_list)
-    predicted_base_labels_h1 = list(dict_fetch(base_prediction_dict_h1))
-    predicted_base_labels_h2 = list(dict_fetch(base_prediction_dict_h2))
-    sequence_h1 = ''.join([label_decoder[base] for base in predicted_base_labels_h1])
-    sequence_h2 = ''.join([label_decoder[base] for base in predicted_base_labels_h2])
-    sys.stderr.write("TIME ELAPSED: " + str(time.time() - start_time) + "\n")
-    sys.stderr.write("FINDING CANDIDATES:\t" + str(contig) + "\t" + str(start_pos) + "\t" + str(end_pos) + "\n")
+        pos_list = sorted(list(all_positions), key=lambda element: (element[0], element[1]))
+        dict_fetch = operator.itemgetter(*pos_list)
+        predicted_base_labels_h1 = list(dict_fetch(base_prediction_dict_h1))
+        predicted_base_labels_h2 = list(dict_fetch(base_prediction_dict_h2))
+        sequence_h1 = ''.join([label_decoder[base] for base in predicted_base_labels_h1])
+        sequence_h2 = ''.join([label_decoder[base] for base in predicted_base_labels_h2])
 
-    candidates_h1 = get_candidates(reference_sequence, sequence_h1, start_pos, end_pos, hp_tag=1)
-    candidates_h2 = get_candidates(reference_sequence, sequence_h2, start_pos, end_pos, hp_tag=2)
+        candidates_h1 = get_candidates(reference_sequence, sequence_h1, start_pos, end_pos, hp_tag=1)
+        candidates_h2 = get_candidates(reference_sequence, sequence_h2, start_pos, end_pos, hp_tag=2)
+
+        all_candidates_h1.extend(candidates_h1)
+        all_candidates_h2.extend(candidates_h2)
 
     sys.stderr.write("ONE THREAD COMPLETE\n")
     sys.stderr.write("TIME ELAPSED: " + str(time.time() - start_time) + "\n")
-    return contig, start_pos, end_pos, candidates_h1, candidates_h2
+    return contig, all_candidates_h1, all_candidates_h2
 
 
 def find_candidates(hdf5_file_path,  reference_file_path, contig, sequence_chunk_keys, threads):
@@ -328,8 +334,9 @@ def find_candidates(hdf5_file_path,  reference_file_path, contig, sequence_chunk
 
     sequence_chunk_key_list = sorted(sequence_chunk_key_list, key=lambda element: (element[1], element[2]))
 
-    candidate_positional_map = defaultdict(set)
-    all_candidates = set()
+    candidate_positional_map_h1 = defaultdict(list)
+    candidate_positional_map_h2 = defaultdict()
+    all_candidate_positions = set()
     # generate the dictionary in parallel
     with concurrent.futures.ProcessPoolExecutor(max_workers=threads) as executor:
         file_chunks = chunks(sequence_chunk_key_list, max(MIN_SEQUENCE_REQUIRED_FOR_MULTITHREADING,
@@ -339,19 +346,19 @@ def find_candidates(hdf5_file_path,  reference_file_path, contig, sequence_chunk
                    for file_chunk in file_chunks]
         for fut in concurrent.futures.as_completed(futures):
             if fut.exception() is None:
-                contig, contig_start, contig_end, candidates_h1, candidates_h2 = fut.result()
+                contig, candidates_h1, candidates_h2 = fut.result()
 
                 sys.stderr.write("UPDATING CANDIDATE DICTIONARY\n")
                 for candidate in candidates_h1:
-                    all_candidates.add(candidate)
-                    candidate_positional_map[candidate[0]].add(candidate)
+                    all_candidate_positions.add(candidate[0])
+                    candidate_positional_map_h1[candidate[0]] = candidate
                 for candidate in candidates_h2:
-                    all_candidates.add(candidate)
-                    candidate_positional_map[candidate[0]].add(candidate)
+                    all_candidate_positions.add(candidate[0])
+                    candidate_positional_map_h2[candidate[0]] = candidate
             else:
                 sys.stderr.write("ERROR: " + str(fut.exception()) + "\n")
             fut._result = None  # python issue 27144
 
-    all_candidates = list(sorted(all_candidates, key=lambda element: (element[1], element[2])))
+    # all_candidates = list(sorted(all_candidates, key=lambda element: (element[1], element[2])))
 
-    return all_candidates, candidate_positional_map
+    return all_candidate_positions, candidate_positional_map_h1, candidate_positional_map_h2
