@@ -1,5 +1,6 @@
 import h5py
 import argparse
+import time
 import sys
 from os.path import isfile, join
 from os import listdir
@@ -259,10 +260,8 @@ def get_candidates(reference_sequence, read_sequence, start_pos, end_pos, hp_tag
 
 def small_chunk_stitch(file_name, reference_file_path, contig, small_chunk_keys):
     # for chunk_key in small_chunk_keys:
-    name_sequence_tuples_h1 = list()
-    name_sequence_tuples_h2 = list()
     fasta_handler = PEPPER.FASTA_handler(reference_file_path)
-
+    start_time = time.time()
     all_positions = set()
     base_prediction_dict_h1 = defaultdict()
     base_prediction_dict_h2 = defaultdict()
@@ -309,10 +308,14 @@ def small_chunk_stitch(file_name, reference_file_path, contig, small_chunk_keys)
     predicted_base_labels_h2 = list(dict_fetch(base_prediction_dict_h2))
     sequence_h1 = ''.join([label_decoder[base] for base in predicted_base_labels_h1])
     sequence_h2 = ''.join([label_decoder[base] for base in predicted_base_labels_h2])
+    sys.stderr.write("TIME ELAPSED: " + str(time.time() - start_time) + "\n")
+    sys.stderr.write("FINDING CANDIDATES:\t" + str(contig) + "\t" + str(start_pos) + "\t" + str(end_pos) + "\n")
 
     candidates_h1 = get_candidates(reference_sequence, sequence_h1, start_pos, end_pos, hp_tag=1)
     candidates_h2 = get_candidates(reference_sequence, sequence_h2, start_pos, end_pos, hp_tag=2)
 
+    sys.stderr.write("ONE THREAD COMPLETE\n")
+    sys.stderr.write("TIME ELAPSED: " + str(time.time() - start_time) + "\n")
     return contig, start_pos, end_pos, candidates_h1, candidates_h2
 
 
@@ -337,6 +340,8 @@ def find_candidates(hdf5_file_path,  reference_file_path, contig, sequence_chunk
         for fut in concurrent.futures.as_completed(futures):
             if fut.exception() is None:
                 contig, contig_start, contig_end, candidates_h1, candidates_h2 = fut.result()
+
+                sys.stderr.write("UPDATING CANDIDATE DICTIONARY\n")
                 for candidate in candidates_h1:
                     all_candidates.add(candidate)
                     candidate_positional_map[candidate[0]].add(candidate)

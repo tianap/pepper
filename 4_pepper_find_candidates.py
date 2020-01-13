@@ -42,7 +42,6 @@ def candidates_to_variants(candidates, contig):
 def write_vcf(contig, candidate_map, vcf_file):
     # print(candidate_map)
     # candidate_map = {2931716: {(2931716, 2931719, 'CTT', 'C', 1, 'DEL'), (2931716, 2931718, 'CT', 'C', 2, 'DEL')}}
-    print(candidate_map)
     for pos in sorted(candidate_map.keys()):
         candidates = candidate_map[pos]
         if len(candidates) > 2:
