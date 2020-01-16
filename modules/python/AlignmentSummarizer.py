@@ -153,7 +153,7 @@ class AlignmentSummarizer:
             al[1] = min(self.region_end_position, al[1])
         # do filtering
         filtered_alignments = [al for al in regions
-                               if (al[3] and al[1] - al[0] >= min_length)]
+                               if (al[3] and al[1] - al[0] + 1 >= min_length)]
         filtered_alignments.sort(key=itemgetter(0))
 
         return filtered_alignments

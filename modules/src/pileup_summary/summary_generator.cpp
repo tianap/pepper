@@ -329,7 +329,7 @@ void SummaryGenerator::debug_print(long long start_pos, long long end_pos) {
     for (int i = start_pos; i <= end_pos; i++) {
         if(i==start_pos) cout<<"REF:\t";
         cout << "  " << reference_sequence[i - start_pos] << "\t";
-        if (longest_insert_count[i] > 0) {
+        if (longest_insert_count[i] > 0 && ImageOptions::GENERATE_INSERTS) {
             for (int ii = 0; ii < longest_insert_count[i]; ii++)cout << "  *" << "\t";
         }
     }
@@ -337,7 +337,7 @@ void SummaryGenerator::debug_print(long long start_pos, long long end_pos) {
     for (int i = start_pos; i <= end_pos; i++) {
         if(i==start_pos) cout<<"TH1:\t";
         cout << "  " <<base_labels_h1[i] << "\t";
-        if (longest_insert_count[i] > 0) {
+        if (longest_insert_count[i] > 0 && ImageOptions::GENERATE_INSERTS) {
             for (int ii = 0; ii < longest_insert_count[i]; ii++) {
                 if (insert_labels_h1[make_pair(i, ii)]) cout << "  "<< insert_labels_h1[make_pair(i, ii)] << "\t";
                 else cout << "  *" << "\t";
@@ -348,7 +348,7 @@ void SummaryGenerator::debug_print(long long start_pos, long long end_pos) {
     for (int i = start_pos; i <= end_pos; i++) {
         if(i==start_pos) cout<<"TH2:\t";
         cout << "  " <<base_labels_h2[i] << "\t";
-        if (longest_insert_count[i] > 0) {
+        if (longest_insert_count[i] > 0 && ImageOptions::GENERATE_INSERTS) {
             for (int ii = 0; ii < longest_insert_count[i]; ii++) {
                 if (insert_labels_h2[make_pair(i, ii)]) cout << "  "<< insert_labels_h2[make_pair(i, ii)] << "\t";
                 else cout << "  *" << "\t";
@@ -404,7 +404,7 @@ void SummaryGenerator::generate_image(long long start_pos, long long end_pos) {
         assert(row.size() == 10);
         image.push_back(row);
 
-        if (longest_insert_count[i] > 0) {
+        if (longest_insert_count[i] > 0 && ImageOptions::GENERATE_INSERTS) {
 
             for (int ii = 0; ii < longest_insert_count[i]; ii++) {
                 vector<uint8_t> ins_row;
@@ -461,7 +461,7 @@ void SummaryGenerator::generate_train_summary(vector <type_read> &reads,
         }
 
         genomic_pos.push_back(make_pair(pos, 0));
-        if (longest_insert_count[pos] > 0) {
+        if (longest_insert_count[pos] > 0 && ImageOptions::GENERATE_INSERTS) {
             for (int ii = 0; ii < longest_insert_count[pos]; ii++) {
                 genomic_pos.push_back(make_pair(pos, ii + 1));
                 if (insert_labels_h1[make_pair(pos, ii)] && insert_labels_h2[make_pair(pos, ii)]) {
@@ -521,7 +521,7 @@ void SummaryGenerator::generate_summary(vector <type_read> &reads,
     // after all the dictionaries are populated, we can simply walk through the region and generate a sequence
     for (long long pos = start_pos; pos <= end_pos; pos++) {
         genomic_pos.push_back(make_pair(pos, 0));
-        if (longest_insert_count[pos] > 0) {
+        if (longest_insert_count[pos] > 0 && ImageOptions::GENERATE_INSERTS) {
             for (int ii = 0; ii < longest_insert_count[pos]; ii++) {
                 genomic_pos.push_back(make_pair(pos, ii + 1));
             }

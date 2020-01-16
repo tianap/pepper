@@ -15,6 +15,7 @@ using namespace std;
 
 namespace ImageOptions {
     static constexpr int MAX_COLOR_VALUE = 254;
+    static constexpr bool GENERATE_INSERTS = false;
 };
 
 class SummaryGenerator {
