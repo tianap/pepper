@@ -11,6 +11,12 @@ class ImageSizeOptions(object):
     MIN_IMAGE_OVERLAP = 100
 
 
+class ReadFilterOptions(object):
+    MIN_MAPQ = 10
+    MIN_BASEQ = 0
+    INCLUDE_SUPPLEMENTARY = False
+
+
 class TrainOptions(object):
     # these two parameters are important, make sure you are sliding in a way that you cover the full sequence length
     # the training loop breaks when current_index + TRAIN_WINDOW > LAST_INDEX. You may lose information if you don't

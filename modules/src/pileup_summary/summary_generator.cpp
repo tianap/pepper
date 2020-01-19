@@ -240,7 +240,7 @@ void SummaryGenerator::generate_labels(type_read read, int hp_tag, long long reg
 }
 
 
-void SummaryGenerator::debug_print(long long start_pos, long long end_pos) {
+void SummaryGenerator::debug_print(long long start_pos, long long end_pos, bool print_label) {
     for (int hp_tag = 0; hp_tag < 3; hp_tag++) {
         cout<<"HP TAG: "<< hp_tag <<endl;
         cout << setprecision(3);
@@ -252,7 +252,7 @@ void SummaryGenerator::debug_print(long long start_pos, long long end_pos) {
             }
         }
         cout << endl;
-        if(hp_tag > 0) {
+        if(hp_tag > 0 && print_label) {
             for (int i = start_pos; i <= end_pos; i++) {
                 if (i == start_pos) cout << "TRH:\t";
                 Position p(i, 0, 0, hp_tag);
@@ -361,7 +361,7 @@ void SummaryGenerator::generate_train_summary(vector <type_read> &reads,
                                               type_read truth_read_h2) {
     for (auto &read:reads) {
         // this populates summaries
-        if(read.mapping_quality > 0) {
+        if(read.mapping_quality >= 10) {
             iterate_over_read(read, start_pos, end_pos);
         }
     }
@@ -422,7 +422,7 @@ void SummaryGenerator::generate_train_summary(vector <type_read> &reads,
 
     generate_image(start_pos, end_pos);
 //     at this point everything should be generated
-//    debug_print(start_pos, end_pos);
+//    debug_print(start_pos, end_pos, 1);
 }
 
 
@@ -431,7 +431,7 @@ void SummaryGenerator::generate_summary(vector <type_read> &reads,
                                         long long end_pos) {
     for (auto &read:reads) {
         // this populates summaries
-        if(read.mapping_quality > 0) {
+        if(read.mapping_quality >= 10) {
             iterate_over_read(read, start_pos, end_pos);
         }
     }
@@ -449,5 +449,5 @@ void SummaryGenerator::generate_summary(vector <type_read> &reads,
     generate_image(start_pos, end_pos);
 
     //at this point everything should be generated
-//    debug_print(start_pos, end_pos);
+//    debug_print(start_pos, end_pos, 0);
 }

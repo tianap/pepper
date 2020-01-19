@@ -95,7 +95,7 @@ public:
     int get_sequence_length(long long start_pos, long long end_pos);
     void generate_labels(type_read read, int hp_tag, long long region_start, long long region_end);
     void generate_ref_features();
-    void debug_print(long long start_pos, long long end_pos);
+    void debug_print(long long start_pos, long long end_pos, bool print_label);
     void generate_image(long long start_pos, long long end_pos);
 };
 

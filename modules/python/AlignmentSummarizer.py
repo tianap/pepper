@@ -5,7 +5,7 @@ import time
 import numpy as np
 from operator import itemgetter
 from modules.python.TextColor import TextColor
-from modules.python.Options import ImageSizeOptions, AlingerOptions
+from modules.python.Options import ImageSizeOptions, AlingerOptions, ReadFilterOptions
 from modules.python.helper import generate_pileup_from_reads
 
 
@@ -152,7 +152,7 @@ class AlignmentSummarizer:
             al[1] = min(self.region_end_position, al[1])
         # do filtering
         filtered_alignments = [al for al in regions
-                               if (al[3] and al[1] - al[0] >= min_length)]
+                               if (al[3] and al[1] - al[0] + 1 >= min_length)]
         filtered_alignments.sort(key=itemgetter(0))
 
         return filtered_alignments
@@ -203,21 +203,20 @@ class AlignmentSummarizer:
         all_image_chunk_ids = []
 
         if train_mode:
-            # get the reads from the bam file
-            include_supplementary = False
+            # get the reads from the bam file9
             truth_reads_h1 = truth_bam_handler_h1.get_reads(self.chromosome_name,
                                                             self.region_start_position,
                                                             self.region_end_position,
-                                                            include_supplementary,
-                                                            0,
-                                                            0)
+                                                            ReadFilterOptions.INCLUDE_SUPPLEMENTARY,
+                                                            ReadFilterOptions.MIN_MAPQ,
+                                                            ReadFilterOptions.MIN_BASEQ)
 
             truth_reads_h2 = truth_bam_handler_h2.get_reads(self.chromosome_name,
                                                             self.region_start_position,
                                                             self.region_end_position,
-                                                            include_supplementary,
-                                                            0,
-                                                            0)
+                                                            ReadFilterOptions.INCLUDE_SUPPLEMENTARY,
+                                                            ReadFilterOptions.MIN_MAPQ,
+                                                            ReadFilterOptions.MIN_BASEQ)
 
             # do a local realignment of truth reads to reference
             if realignment_flag:
@@ -254,16 +253,16 @@ class AlignmentSummarizer:
                 truth_reads_h1 = truth_bam_handler_h1.get_reads(self.chromosome_name,
                                                                 region_start,
                                                                 region_end,
-                                                                include_supplementary,
-                                                                0,
-                                                                0)
+                                                                ReadFilterOptions.INCLUDE_SUPPLEMENTARY,
+                                                                ReadFilterOptions.MIN_MAPQ,
+                                                                ReadFilterOptions.MIN_BASEQ)
 
                 truth_reads_h2 = truth_bam_handler_h2.get_reads(self.chromosome_name,
                                                                 region_start,
                                                                 region_end,
-                                                                include_supplementary,
-                                                                0,
-                                                                0)
+                                                                ReadFilterOptions.INCLUDE_SUPPLEMENTARY,
+                                                                ReadFilterOptions.MIN_MAPQ,
+                                                                ReadFilterOptions.MIN_BASEQ)
                 truth_reads_h1 = self.reads_to_reference_realignment(region_start,
                                                                      region_end,
                                                                      truth_reads_h1)
@@ -292,13 +291,12 @@ class AlignmentSummarizer:
 
                 read_start = max(0, region_start)
                 read_end = region_end
-                include_supplementary = False
                 all_reads = self.bam_handler.get_reads(self.chromosome_name,
                                                        read_start,
                                                        read_end,
-                                                       include_supplementary,
-                                                       0,
-                                                       0)
+                                                       ReadFilterOptions.INCLUDE_SUPPLEMENTARY,
+                                                       ReadFilterOptions.MIN_MAPQ,
+                                                       ReadFilterOptions.MIN_BASEQ)
                 total_reads = len(all_reads)
 
                 if total_reads == 0:
@@ -358,9 +356,9 @@ class AlignmentSummarizer:
             all_reads = self.bam_handler.get_reads(self.chromosome_name,
                                                    read_start,
                                                    read_end,
-                                                   include_supplementary,
-                                                   0,
-                                                   0)
+                                                   ReadFilterOptions.INCLUDE_SUPPLEMENTARY,
+                                                   ReadFilterOptions.MIN_MAPQ,
+                                                   ReadFilterOptions.MIN_BASEQ)
 
             total_reads = len(all_reads)
 
