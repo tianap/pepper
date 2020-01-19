@@ -96,14 +96,6 @@ def train(train_file, test_file, batch_size, epoch_limit, gpu_mode, num_workers,
     param_count = sum(p.numel() for p in transducer_model.parameters() if p.requires_grad)
     sys.stderr.write(TextColor.RED + "INFO: TOTAL TRAINABLE PARAMETERS:\t" + str(param_count) + "\n" + TextColor.END)
 
-    model_optimizer = torch.optim.Adam(transducer_model.parameters(), lr=lr, weight_decay=decay)
-    lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(model_optimizer, 'min')
-
-    if retrain_model is True:
-        sys.stderr.write(TextColor.GREEN + "INFO: OPTIMIZER LOADING\n" + TextColor.END)
-        model_optimizer = ModelHandler.load_simple_optimizer(model_optimizer, retrain_model_path, gpu_mode)
-        sys.stderr.write(TextColor.GREEN + "INFO: OPTIMIZER LOADED\n" + TextColor.END)
-
     if gpu_mode:
         transducer_model = torch.nn.DataParallel(transducer_model).cuda()
 
@@ -112,8 +104,15 @@ def train(train_file, test_file, batch_size, epoch_limit, gpu_mode, num_workers,
     criterion = nn.CrossEntropyLoss(class_weights)
 
     if gpu_mode is True:
-        model_optimizer = model_optimizer.cuda()
         criterion = criterion.cuda()
+
+    model_optimizer = torch.optim.Adam(transducer_model.parameters(), lr=lr, weight_decay=decay)
+    lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(model_optimizer, 'min')
+
+    if retrain_model is True:
+        sys.stderr.write(TextColor.GREEN + "INFO: OPTIMIZER LOADING\n" + TextColor.END)
+        model_optimizer = ModelHandler.load_simple_optimizer(model_optimizer, retrain_model_path, gpu_mode)
+        sys.stderr.write(TextColor.GREEN + "INFO: OPTIMIZER LOADED\n" + TextColor.END)
 
     start_epoch = prev_ite
 
