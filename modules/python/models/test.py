@@ -82,8 +82,8 @@ def test(data_file, batch_size, gpu_mode, transducer_model, num_workers, gru_lay
                     label_chunk_h1 = labels[:, 0, i:i+TrainOptions.TRAIN_WINDOW]
                     label_chunk_h2 = labels[:, 1, i:i+TrainOptions.TRAIN_WINDOW]
 
-                    hap_1_tensor = torch.cat((image_chunk_h1, image_chunk_h2), 2)
-                    hap_2_tensor = torch.cat((image_chunk_h2, image_chunk_h1), 2)
+                    hap_1_tensor = torch.cat((image_chunk_h, image_chunk_h1, image_chunk_h2), 2)
+                    hap_2_tensor = torch.cat((image_chunk_h, image_chunk_h2, image_chunk_h1), 2)
 
                     out_h1, out_h2, hidden_h1, hidden_h2 = \
                         transducer_model(hap_1_tensor, hap_2_tensor, hidden_h1, hidden_h2)
