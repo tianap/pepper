@@ -112,6 +112,7 @@ def train(train_file, test_file, batch_size, epoch_limit, gpu_mode, num_workers,
     criterion = nn.CrossEntropyLoss(class_weights)
 
     if gpu_mode is True:
+        model_optimizer = model_optimizer.cuda()
         criterion = criterion.cuda()
 
     start_epoch = prev_ite
