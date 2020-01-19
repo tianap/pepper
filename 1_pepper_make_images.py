@@ -53,11 +53,13 @@ if __name__ == '__main__':
         "-r",
         "--region",
         type=str,
+        default=None,
         help="Region in [chr_name:start-end] format"
     )
     parser.add_argument(
         "-rb",
         "--region_bed",
+        default=None,
         type=str,
         help="Region in [chr_name:start-end] format"
     )
