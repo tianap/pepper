@@ -1,5 +1,5 @@
 class ImageSizeOptions(object):
-    IMAGE_HEIGHT = 20
+    IMAGE_HEIGHT = 30
     IMAGE_CHANNEL_HEIGHT = 10
     IMAGE_CHANNELS = 1
     SEQ_LENGTH = 1000

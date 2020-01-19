@@ -158,8 +158,8 @@ def train(train_file, test_file, batch_size, epoch_limit, gpu_mode, num_workers,
                     label_chunk_h1 = labels[:, 0, i:i+TrainOptions.TRAIN_WINDOW]
                     label_chunk_h2 = labels[:, 1, i:i+TrainOptions.TRAIN_WINDOW]
 
-                    hap_1_tensor = torch.cat((image_chunk_h1, image_chunk_h2), 2)
-                    hap_2_tensor = torch.cat((image_chunk_h2, image_chunk_h1), 2)
+                    hap_1_tensor = torch.cat((image_chunk_h, image_chunk_h1, image_chunk_h2), 2)
+                    hap_2_tensor = torch.cat((image_chunk_h, image_chunk_h2, image_chunk_h1), 2)
 
                     # print()
                     # image_chunk_h = hap_1_tensor[0, :, :]
