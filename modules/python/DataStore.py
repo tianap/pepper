@@ -22,8 +22,8 @@ class DataStore(object):
         return self
 
     def __exit__(self, *args):
-        # if self.mode != 'r' and self._meta is not None:
-        #     self._write_metadata(self.meta)
+        if self.mode != 'r' and self._meta is not None:
+            self._write_metadata(self.meta)
         self.file_handler.close()
 
     def _write_metadata(self, data):
