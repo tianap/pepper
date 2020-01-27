@@ -73,6 +73,7 @@ class SummaryGenerator {
     map<Position, char> label_map;
 public:
     vector< vector< vector<uint8_t> > > image;
+    vector<uint8_t> ref_image;
     vector< vector<uint8_t> > labels;
     vector<pair<long long, int> > genomic_pos;
     vector<int> bad_label_positions;

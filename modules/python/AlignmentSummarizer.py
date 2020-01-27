@@ -24,6 +24,7 @@ class AlignmentSummarizer:
         chunk_end = min(len(summary.genomic_pos), chunk_size)
         images = []
         labels = []
+        ref_seq = []
         positions = []
         chunk_ids = []
 
@@ -31,22 +32,25 @@ class AlignmentSummarizer:
             image_chunk = [img[chunk_start:chunk_end] for img in summary.image]
 
             pos_chunk = summary.genomic_pos[chunk_start:chunk_end]
+            ref_chunk = summary.ref_image[chunk_start:chunk_end]
             label_chunk = [[0] * (chunk_end - chunk_start)] * 2
 
-            assert (len(image_chunk[0]) == len(pos_chunk) == len(label_chunk[0]))
+            assert (len(image_chunk[0]) == len(pos_chunk) == len(ref_chunk) == len(label_chunk[0]))
 
             padding_required = chunk_size - len(image_chunk[0])
             if padding_required > 0:
                 label_chunk = [chunk + [0] * padding_required for chunk in label_chunk]
                 pos_chunk = pos_chunk + [(-1, -1)] * padding_required
+                ref_chunk = ref_chunk + [0] * padding_required
                 image_chunk = [chunk + [[0] * ImageSizeOptions.IMAGE_CHANNEL_HEIGHT] * padding_required for chunk in image_chunk]
 
-            assert (len(image_chunk[0]) == len(pos_chunk) == len(label_chunk[0]) == ImageSizeOptions.SEQ_LENGTH)
+            assert (len(image_chunk[0]) == len(pos_chunk) == len(ref_chunk) == len(label_chunk[0]) == ImageSizeOptions.SEQ_LENGTH)
 
             images.append(image_chunk)
             labels.append(label_chunk)
             positions.append(pos_chunk)
             chunk_ids.append(chunk_id)
+            ref_seq.append(ref_chunk)
             chunk_id += 1
 
             if chunk_end == len(summary.genomic_pos):
@@ -55,12 +59,13 @@ class AlignmentSummarizer:
             chunk_start = chunk_end - chunk_overlap
             chunk_end = min(len(summary.genomic_pos), chunk_start + chunk_size)
 
-        return images, labels, positions, chunk_ids
+        return images, labels, positions, chunk_ids, ref_seq
 
     @staticmethod
     def chunk_images_train(summary, chunk_size, chunk_overlap):
         images = []
         labels = []
+        ref_seq = []
         positions = []
         chunk_ids = []
 
@@ -82,14 +87,15 @@ class AlignmentSummarizer:
 
                 image_chunk = [img[chunk_start:chunk_end] for img in summary.image]
                 pos_chunk = summary.genomic_pos[chunk_start:chunk_end]
+                ref_seq_chunk = summary.ref_image[chunk_start:chunk_end]
                 label_chunk = [lbl[chunk_start:chunk_end] for lbl in summary.labels]
-
-                assert (len(image_chunk[0]) == len(pos_chunk) == len(label_chunk[0]) == chunk_size)
+                assert (len(image_chunk[0]) == len(pos_chunk) == len(label_chunk[0]) == len(ref_seq_chunk) == chunk_size)
 
                 images.append(image_chunk)
                 labels.append(label_chunk)
                 positions.append(pos_chunk)
                 chunk_ids.append(chunk_id)
+                ref_seq.append(ref_seq_chunk)
                 chunk_id += 1
 
                 if chunk_end == bad_indices[i]:
@@ -100,9 +106,9 @@ class AlignmentSummarizer:
 
             chunk_start = chunk_end + 1
 
-        assert(len(images) == len(labels) == len(positions) == len(chunk_ids))
+        assert(len(images) == len(labels) == len(positions) == len(ref_seq) == len(chunk_ids))
 
-        return images, labels, positions, chunk_ids
+        return images, labels, positions, chunk_ids, ref_seq
 
     @staticmethod
     def overlap_length_between_ranges(range_a, range_b):
@@ -194,13 +200,14 @@ class AlignmentSummarizer:
 
         return realigned_reads
 
-    def create_summary(self, truth_bam_handler_h1, truth_bam_handler_h2, train_mode, realignment_flag=True):
+    def create_summary(self, truth_bam_handler_h1, truth_bam_handler_h2, train_mode, realignment_flag=False):
         log_prefix = "[" + self.chromosome_name + ":" + str(self.region_start_position) + "-" \
                      + str(self.region_end_position) + "]"
         all_images = []
         all_labels = []
         all_positions = []
         all_image_chunk_ids = []
+        all_ref_seq = []
 
         if train_mode:
             # get the reads from the bam file9
@@ -340,14 +347,15 @@ class AlignmentSummarizer:
                                                          truth_read_h1,
                                                          truth_read_h2)
 
-                images, labels, positions, chunk_ids = self.chunk_images_train(summary_generator,
-                                                                               chunk_size=ImageSizeOptions.SEQ_LENGTH,
-                                                                               chunk_overlap=ImageSizeOptions.SEQ_OVERLAP)
+                images, labels, positions, chunk_ids, ref_seqs = self.chunk_images_train(summary_generator,
+                                                                                         chunk_size=ImageSizeOptions.SEQ_LENGTH,
+                                                                                         chunk_overlap=ImageSizeOptions.SEQ_OVERLAP)
 
                 all_images.extend(images)
                 all_labels.extend(labels)
                 all_positions.extend(positions)
                 all_image_chunk_ids.extend(chunk_ids)
+                all_ref_seq.extend(ref_seqs)
         else:
             # HERE REALIGN THE READS TO THE REFERENCE THEN GENERATE THE SUMMARY TO GET A POLISHED HAPLOTYPE
             read_start = max(0, self.region_start_position)
@@ -404,7 +412,7 @@ class AlignmentSummarizer:
                                                self.region_start_position,
                                                self.region_end_position)
 
-            images, labels, positions, chunk_ids = \
+            images, labels, positions, chunk_ids, ref_seqs = \
                 self.chunk_images(summary_generator,
                                   chunk_size=ImageSizeOptions.SEQ_LENGTH,
                                   chunk_overlap=ImageSizeOptions.SEQ_OVERLAP)
@@ -413,7 +421,8 @@ class AlignmentSummarizer:
             all_labels.extend(labels)
             all_positions.extend(positions)
             all_image_chunk_ids.extend(chunk_ids)
+            all_ref_seq.extend(ref_seqs)
 
-        assert(len(all_images) == len(all_labels) == len(all_image_chunk_ids))
+        assert(len(all_images) == len(all_labels) == len(all_image_chunk_ids) == len(all_ref_seq))
 
-        return all_images, all_labels, all_positions, all_image_chunk_ids
+        return all_images, all_labels, all_positions, all_image_chunk_ids, all_ref_seq

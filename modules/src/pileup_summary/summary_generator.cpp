@@ -32,6 +32,16 @@ int get_feature_index(char base, bool is_reverse) {
 }
 
 
+int get_reference_feature_index(char base) {
+    base = toupper(base);
+    if (base == 'A') return 1;
+    if (base == 'C') return 2;
+    if (base == 'G') return 3;
+    if (base == 'T') return 4;
+    return 0;
+}
+
+
 uint8_t get_labels(char base) {
     base = toupper(base);
     if (base == 'A') return 1;
@@ -241,6 +251,7 @@ void SummaryGenerator::generate_labels(type_read read, int hp_tag, long long reg
 
 
 void SummaryGenerator::debug_print(long long start_pos, long long end_pos, bool print_label) {
+    cout<<"HERE"<<endl;
     for (int hp_tag = 0; hp_tag < 3; hp_tag++) {
         cout<<"HP TAG: "<< hp_tag <<endl;
         cout << setprecision(3);
@@ -250,6 +261,11 @@ void SummaryGenerator::debug_print(long long start_pos, long long end_pos, bool 
             if (longest_insert_count[i] > 0) {
                 for (int ii = 0; ii < longest_insert_count[i]; ii++)cout << "  *" << "\t";
             }
+        }
+        cout<<ref_image.size()<<endl;
+        for (int i = 0; i < ref_image.size(); i++) {
+            if (i == 0) cout << "REF2:\t";
+            printf("%3d\t", ref_image[i]);
         }
         cout << endl;
         if(hp_tag > 0 && print_label) {
@@ -321,7 +337,7 @@ void SummaryGenerator::generate_image(long long start_pos, long long end_pos) {
                 Position p(ref_pos, 0, feature_index, hp_tag);
                 pixel_value = 0;
                 if(summaries.find(p) != summaries.end())
-                    pixel_value = (summaries[p] / max(1.0, coverage[make_pair(ref_pos, 0)])) * ImageOptions::MAX_COLOR_VALUE;
+                    pixel_value = (summaries[p] / max(1.0, coverage[make_pair(ref_pos, hp_tag)])) * ImageOptions::MAX_COLOR_VALUE;
                 row.push_back(pixel_value);
             }
             assert(row.size() == 10);
@@ -337,7 +353,7 @@ void SummaryGenerator::generate_image(long long start_pos, long long end_pos) {
                         Position p(ref_pos, ii + 1, feature_index, hp_tag);
                         pixel_value = 0;
                         if(summaries.find(p) != summaries.end())
-                            pixel_value = (summaries[p] / max(1.0, coverage[make_pair(ref_pos, 0)])) * ImageOptions::MAX_COLOR_VALUE;
+                            pixel_value = (summaries[p] / max(1.0, coverage[make_pair(ref_pos, hp_tag)])) * ImageOptions::MAX_COLOR_VALUE;
                         ins_row.push_back(pixel_value);
 
                     }
@@ -420,6 +436,15 @@ void SummaryGenerator::generate_train_summary(vector <type_read> &reads,
         labels.push_back(hp_labels);
     }
 
+    // generate reference sequence
+    for (int i = start_pos; i <= end_pos; i++) {
+        ref_image.push_back(get_reference_feature_index(reference_sequence[i - start_pos]));
+
+        if (longest_insert_count[i] > 0) {
+            for (int ii = 0; ii < longest_insert_count[i]; ii++)
+                ref_image.push_back(get_reference_feature_index('*'));
+        }
+    }
     generate_image(start_pos, end_pos);
 //     at this point everything should be generated
 //    debug_print(start_pos, end_pos, 1);
@@ -443,6 +468,16 @@ void SummaryGenerator::generate_summary(vector <type_read> &reads,
             for (int ii = 0; ii < longest_insert_count[pos]; ii++) {
                 genomic_pos.push_back(make_pair(pos, ii + 1));
             }
+        }
+    }
+
+    // generate reference sequence
+    for (int i = start_pos; i <= end_pos; i++) {
+        ref_image.push_back(get_reference_feature_index(reference_sequence[i - start_pos]));
+
+        if (longest_insert_count[i] > 0) {
+            for (int ii = 0; ii < longest_insert_count[i]; ii++)
+                ref_image.push_back(get_reference_feature_index('*'));
         }
     }
 

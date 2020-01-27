@@ -22,8 +22,8 @@ class DataStore(object):
         return self
 
     def __exit__(self, *args):
-        if self.mode != 'r' and self._meta is not None:
-            self._write_metadata(self.meta)
+        # if self.mode != 'r' and self._meta is not None:
+        #     self._write_metadata(self.meta)
         self.file_handler.close()
 
     def _write_metadata(self, data):
@@ -50,7 +50,7 @@ class DataStore(object):
         self._meta = self.meta
         self._meta.update(meta)
 
-    def write_summary(self, region, image, label, position, index, chunk_id, summary_name):
+    def write_summary(self, region, image, label, position, index, chunk_id, summary_name, ref_seq):
         contig_name, region_start, region_end = region
         if 'summaries' not in self.meta:
             self.meta['summaries'] = set()
@@ -65,3 +65,4 @@ class DataStore(object):
             self.file_handler['{}/{}/{}'.format(self._summary_path_, summary_name, 'region_start')] = region_start
             self.file_handler['{}/{}/{}'.format(self._summary_path_, summary_name, 'region_end')] = region_end
             self.file_handler['{}/{}/{}'.format(self._summary_path_, summary_name, 'chunk_id')] = chunk_id
+            self.file_handler['{}/{}/{}'.format(self._summary_path_, summary_name, 'ref_seq')] = ref_seq
