@@ -441,13 +441,11 @@ def find_candidates(hdf5_file_path,  reference_file_path, contig, sequence_chunk
     candidate_positional_map_h2 = defaultdict(lambda: list)
 
     for mismatch_group in all_groups_h1:
-        print(mismatch_group)
         variant_h1 = mismatch_groups_to_variants(mismatch_group)
         all_candidate_positions.add(variant_h1[0])
         candidate_positional_map_h1[variant_h1[0]] = variant_h1
 
     for mismatch_group in all_groups_h2:
-        print(mismatch_group)
         variant_h2 = mismatch_groups_to_variants(mismatch_group)
         all_candidate_positions.add(variant_h2[0])
         candidate_positional_map_h2[variant_h2[0]] = variant_h2
