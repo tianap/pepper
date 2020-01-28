@@ -279,8 +279,8 @@ class AlignmentSummarizer:
                 truth_regions.append([region_start, region_end, truth_reads_h1[0], truth_reads_h2[0], True])
 
             if not truth_regions:
-                sys.stderr.write(TextColor.GREEN + "INFO: " + log_prefix + " NO TRAINING REGION FOUND.\n"
-                                 + TextColor.END)
+                # sys.stderr.write(TextColor.GREEN + "INFO: " + log_prefix + " NO TRAINING REGION FOUND.\n"
+                #                  + TextColor.END)
                 return [], [], [], [], []
 
             for region in truth_regions:
