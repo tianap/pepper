@@ -292,6 +292,8 @@ def mismatch_groups_to_variants(mismatch_group):
 
     ref_seq = ''.join(label_decoder[i] for i in ref_allele)
     alt_seq = ''.join(label_decoder[i] for i in alt_allele)
+    if len(ref_seq) == 0 or len(alt_seq) == 0:
+        print("ERROR: ", start_pos, end_pos+1, ref_seq, alt_seq, v_type)
     return start_pos, end_pos+1, ref_seq, alt_seq, v_type
 
 
