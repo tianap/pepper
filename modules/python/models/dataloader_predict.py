@@ -25,7 +25,7 @@ class SequenceDataset(Dataset):
     Arguments:
         A HDF5 file path
     """
-    def __init__(self, image_directory):
+    def __init__(self, image_directory, load_labels=False):
         self.transform = transforms.Compose([transforms.ToTensor()])
         file_image_pair = []
 
@@ -43,6 +43,7 @@ class SequenceDataset(Dataset):
                                      + hdf5_file_path + "\n" + TextColor.END)
 
         self.all_images = file_image_pair
+        self.load_labels = load_labels
 
     def __getitem__(self, index):
         # load the image
@@ -56,8 +57,13 @@ class SequenceDataset(Dataset):
             chunk_id = hdf5_file['summaries'][image_name]['chunk_id'][()]
             contig_start = hdf5_file['summaries'][image_name]['region_start'][()]
             contig_end = hdf5_file['summaries'][image_name]['region_end'][()]
+            ref_seq = hdf5_file['summaries'][image_name]['ref_seq'][()]
+            if self.load_labels:
+                label = hdf5_file['summaries'][image_name]['label'][()]
+            else:
+                label = []
 
-        return contig, contig_start, contig_end, chunk_id, image, position, index
+        return contig, contig_start, contig_end, chunk_id, image, position, index, ref_seq, label
 
     def __len__(self):
         return len(self.all_images)

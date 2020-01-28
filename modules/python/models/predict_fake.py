@@ -32,7 +32,7 @@ def predict(test_file, output_filename, model_path, batch_size, threads, num_wor
     sys.stderr.flush()
 
     # data loader
-    test_data = SequenceDataset(test_file)
+    test_data = SequenceDataset(test_file, load_labels=True)
     test_loader = DataLoader(test_data,
                              batch_size=batch_size,
                              shuffle=False,
@@ -51,18 +51,11 @@ def predict(test_file, output_filename, model_path, batch_size, threads, num_wor
     sys.stderr.write(TextColor.CYAN + 'MODEL LOADED\n')
 
     with torch.no_grad():
-        for contig, contig_start, contig_end, chunk_id, images, position, index, ref_seq in tqdm(test_loader, ncols=50):
+        for contig, contig_start, contig_end, chunk_id, images, position, index, ref_seq, labels in tqdm(test_loader, ncols=50):
             sys.stderr.flush()
             images = images.type(torch.FloatTensor)
             if gpu_mode:
                 images = images.cuda()
-
-            hidden_h1 = torch.zeros(images.size(0), 2 * TrainOptions.GRU_LAYERS, TrainOptions.HIDDEN_SIZE)
-            hidden_h2 = torch.zeros(images.size(0), 2 * TrainOptions.GRU_LAYERS, TrainOptions.HIDDEN_SIZE)
-
-            if gpu_mode:
-                hidden_h1 = hidden_h1.cuda()
-                hidden_h2 = hidden_h2.cuda()
 
             prediction_base_counter_h1 = np.zeros((images.size(0), ImageSizeOptions.SEQ_LENGTH, ImageSizeOptions.TOTAL_LABELS))
             prediction_base_counter_h2 = np.zeros((images.size(0), ImageSizeOptions.SEQ_LENGTH, ImageSizeOptions.TOTAL_LABELS))
@@ -76,70 +69,26 @@ def predict(test_file, output_filename, model_path, batch_size, threads, num_wor
                 chunk_start = i
                 chunk_end = i + TrainOptions.TRAIN_WINDOW
                 # chunk all the data
-                image_chunk_h  = images[:, 0, i:i+TrainOptions.TRAIN_WINDOW]
-                image_chunk_h1 = images[:, 1, i:i+TrainOptions.TRAIN_WINDOW]
-                image_chunk_h2 = images[:, 2, i:i+TrainOptions.TRAIN_WINDOW]
+                label_chunk_h1 = labels[:, 0, i:i+TrainOptions.TRAIN_WINDOW]
+                label_chunk_h2 = labels[:, 1, i:i+TrainOptions.TRAIN_WINDOW]
 
-                # run inference
-                out_h1, hidden_h1 = transducer_model(image_chunk_h1, hidden_h1)
-                out_h2, hidden_h2 = transducer_model(image_chunk_h2, hidden_h2)
-
-                # do softmax and get prediction
-                m = nn.Softmax(dim=2)
-                soft_probs_h1 = m(out_h1)
-                output_preds_h1 = soft_probs_h1.cpu()
-                base_max_value_h1, predicted_base_label_h1 = torch.max(output_preds_h1, dim=2)
-
-                # do softmax and get prediction
-                m = nn.Softmax(dim=2)
-                soft_probs_h2 = m(out_h2)
-                output_preds_h2 = soft_probs_h2.cpu()
-                base_max_value_h2, predicted_base_label_h2 = torch.max(output_preds_h2, dim=2)
-
-                # convert everything to list
-                base_max_value_h1 = base_max_value_h1.numpy().tolist()
-                base_max_value_h2 = base_max_value_h2.numpy().tolist()
-                predicted_base_label_h1 = predicted_base_label_h1.numpy().tolist()
-                predicted_base_label_h2 = predicted_base_label_h2.numpy().tolist()
-
-                assert(len(base_max_value_h1) == len(predicted_base_label_h1))
-                assert(len(base_max_value_h2) == len(predicted_base_label_h2))
+                predicted_base_label_h1 = label_chunk_h1.numpy().tolist()
+                predicted_base_label_h2 = label_chunk_h2.numpy().tolist()
 
                 for ii in range(0, len(predicted_base_label_h1)):
-                    for j in range(0, TrainOptions.TRAIN_WINDOW):
-                        for k in range(0, ImageSizeOptions.TOTAL_LABELS):
-                            prediction_base_probs_h1[ii][chunk_start+j][k] += output_preds_h1[ii][j][k]
-
                     chunk_pos = chunk_start
-                    for p_base, base in zip(base_max_value_h1[ii], predicted_base_label_h1[ii]):
+                    for base in predicted_base_label_h1[ii]:
                         prediction_base_counter_h1[ii][chunk_pos][base] += 1
                         chunk_pos += 1
 
                 for ii in range(0, len(predicted_base_label_h2)):
-                    for j in range(0, TrainOptions.TRAIN_WINDOW):
-                        for k in range(0, ImageSizeOptions.TOTAL_LABELS):
-                            prediction_base_probs_h2[ii][chunk_start+j][k] += output_preds_h2[ii][j][k]
-
                     chunk_pos = chunk_start
-                    for p_base, base in zip(base_max_value_h2[ii], predicted_base_label_h2[ii]):
+                    for base in predicted_base_label_h2[ii]:
                         prediction_base_counter_h2[ii][chunk_pos][base] += 1
                         chunk_pos += 1
 
             predicted_base_labels_h1 = np.argmax(np.array(prediction_base_counter_h1), axis=2)
             predicted_base_labels_h2 = np.argmax(np.array(prediction_base_counter_h2), axis=2)
-
-            # for i in range(images.size(0)):
-            #     for pos, indx, p_h1, p_h2, base_h1, base_h2, base_ref in zip(position[i], index[i], prediction_base_probs_h1[i], prediction_base_probs_h2[i], predicted_base_labels_h1[i], predicted_base_labels_h2[i], ref_seq[i]):
-            #         print(pos.item(), indx.item(), p_h1, p_h2, base_h1, base_h2, base_ref.item())
-            # exit()
-            #
-            # # print()
-            # # print(contig_start, contig_end)
-            # # print(ref_seq)
-            # # for i in range(images.size(0)):
-            # #     print(predicted_base_label_h1[i])
-            # #     print(predicted_base_label_h2[i])
-            # exit()
 
             for i in range(images.size(0)):
                 prediction_data_file.write_prediction(contig[i], contig_start[i], contig_end[i], chunk_id[i],

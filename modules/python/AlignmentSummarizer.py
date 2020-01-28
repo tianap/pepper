@@ -279,9 +279,9 @@ class AlignmentSummarizer:
                 truth_regions.append([region_start, region_end, truth_reads_h1[0], truth_reads_h2[0], True])
 
             if not truth_regions:
-                # sys.stderr.write(TextColor.GREEN + "INFO: " + log_prefix + " NO TRAINING REGION FOUND.\n"
-                #                  + TextColor.END)
-                return [], [], [], []
+                sys.stderr.write(TextColor.GREEN + "INFO: " + log_prefix + " NO TRAINING REGION FOUND.\n"
+                                 + TextColor.END)
+                return [], [], [], [], []
 
             for region in truth_regions:
                 region_start, region_end, truth_read_h1, truth_read_h2, is_kept = tuple(region)
@@ -371,7 +371,7 @@ class AlignmentSummarizer:
             total_reads = len(all_reads)
 
             if total_reads == 0:
-                return [], [], [], []
+                return [], [], [], [], []
 
             if total_reads > AlingerOptions.MAX_READS_IN_REGION:
                 # https://github.com/google/nucleus/blob/master/nucleus/util/utils.py

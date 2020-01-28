@@ -258,18 +258,63 @@ def get_candidates(reference_sequence, read_sequence, start_pos, end_pos, hp_tag
     return candidate_list
 
 
+def group_adjacent_mismatches(mismatches):
+    all_groups = []
+    current_group = []
+    for mismatch in mismatches:
+        if len(current_group) == 0:
+            current_group.append(mismatch)
+        elif abs(current_group[-1][0] - mismatch[0]) <= 1:
+            current_group.append(mismatch)
+        else:
+            all_groups.append(current_group)
+            current_group = [mismatch]
+    all_groups.append(current_group)
+
+    return all_groups
+
+
+def mismatch_groups_to_variants(mismatch_group):
+    if len(mismatch_group) == 0:
+        return []
+    v_type = 'SNP'
+    if len(mismatch_group) > 1:
+        v_type = 'INDEL'
+
+    mismatch_group = sorted(mismatch_group, key=operator.itemgetter(0, 1))
+    start_pos = mismatch_group[0][0]
+    end_pos = mismatch_group[-1][0]
+    ref_allele = []
+    alt_allele = []
+    for pos, indx, ref, alt in mismatch_group:
+        ref_allele.append(ref)
+        alt_allele.append(alt)
+
+    ref_seq = ''.join(label_decoder[i] for i in ref_allele)
+    alt_seq = ''.join(label_decoder[i] for i in alt_allele)
+    return start_pos, end_pos+1, ref_seq, alt_seq, v_type
+
+
+def get_anchor_positions(base_predictions, ref_seq, indices, positions):
+    is_diff = base_predictions != ref_seq
+    major_positions = np.where(indices == 0)
+    minor_positions = np.where(indices != 0)
+    delete_anchors = positions[major_positions][np.where(base_predictions[major_positions] == 0)] - 1
+    insert_anchors = positions[minor_positions][np.where(base_predictions[minor_positions] != 0)]
+
+    return list(delete_anchors), list(insert_anchors)
+
+
 def small_chunk_stitch(file_name, reference_file_path, contig, small_chunk_keys):
     # for chunk_key in small_chunk_keys:
     fasta_handler = PEPPER.FASTA_handler(reference_file_path)
     start_time = time.time()
 
-    all_candidates_h1 = list()
-    all_candidates_h2 = list()
+    all_mismatches_h1 = list()
+    all_mismatches_h2 = list()
     # Find candidates per chunk
     for contig_name, _st, _end in small_chunk_keys:
         all_positions = set()
-        base_prediction_dict_h1 = defaultdict()
-        base_prediction_dict_h2 = defaultdict()
         highest_index_per_pos = defaultdict(lambda: 0)
 
         chunk_name = contig_name + '-' + str(_st) + '-' + str(_end)
@@ -285,44 +330,69 @@ def small_chunk_stitch(file_name, reference_file_path, contig, small_chunk_keys)
                 bases_h2 = hdf5_file['predictions'][contig][chunk_name][chunk]['bases_h2'][()]
                 positions = hdf5_file['predictions'][contig][chunk_name][chunk]['position'][()]
                 indices = hdf5_file['predictions'][contig][chunk_name][chunk]['index'][()]
+                ref_seq = hdf5_file['predictions'][contig][chunk_name][chunk]['ref_seq'][()]
 
             positions = np.array(positions, dtype=np.int64)
             base_predictions_h1 = np.array(bases_h1, dtype=np.int)
             base_predictions_h2 = np.array(bases_h2, dtype=np.int)
+            ref_seq = np.array(ref_seq, dtype=np.int)
 
-            for pos, indx, base_pred_h1, base_pred_h2 in zip(positions, indices, base_predictions_h1, base_predictions_h2):
+            delete_anchors_h1, insert_anchors_h1 = get_anchor_positions(base_predictions_h1, ref_seq, indices, positions)
+            delete_anchors_h2, insert_anchors_h2 = get_anchor_positions(base_predictions_h2, ref_seq, indices, positions)
+            all_anchors_h1 = insert_anchors_h1 + delete_anchors_h1
+            all_anchors_h2 = insert_anchors_h2 + delete_anchors_h2
+            all_anchors = all_anchors_h1 + all_anchors_h2
+
+            # as I have carried the reference sequence over, we will get the candidates naturally
+            for pos, indx, ref_base, base_pred_h1, base_pred_h2 in zip(positions,
+                                                                       indices,
+                                                                       ref_seq,
+                                                                       base_predictions_h1,
+                                                                       base_predictions_h2):
                 if indx < 0 or pos < 0:
                     continue
-                if (pos, indx) not in base_prediction_dict_h1:
-                    base_prediction_dict_h1[(pos, indx)] = base_pred_h1
-                    base_prediction_dict_h2[(pos, indx)] = base_pred_h2
+                if indx == 0 and pos in all_anchors:
+                    if pos in all_anchors_h1 or ref_base != base_pred_h1:
+                        all_mismatches_h1.append((pos, indx, ref_base, base_pred_h1))
+                    if pos in all_anchors_h2 or ref_base != base_pred_h2:
+                        all_mismatches_h2.append((pos, indx, ref_base, base_pred_h2))
+                    all_positions.add((pos, indx))
+                elif (pos, indx) not in all_positions:
+                    if ref_base != base_pred_h1:
+                        all_mismatches_h1.append((pos, indx, ref_base, base_pred_h1))
+                    if ref_base != base_pred_h2:
+                        all_mismatches_h2.append((pos, indx, ref_base, base_pred_h2))
                     all_positions.add((pos, indx))
                     highest_index_per_pos[pos] = max(highest_index_per_pos[pos], indx)
 
+
         # now find the sequences and find all the candidates
-        all_positions = sorted(all_positions)
-        start_pos, end_pos = all_positions[0][0], all_positions[-1][0]
-
-        reference_sequence = fasta_handler.get_reference_sequence(contig,
-                                                                  start_pos,
-                                                                  end_pos + 1)
-
-        pos_list = sorted(list(all_positions), key=lambda element: (element[0], element[1]))
-        dict_fetch = operator.itemgetter(*pos_list)
-        predicted_base_labels_h1 = list(dict_fetch(base_prediction_dict_h1))
-        predicted_base_labels_h2 = list(dict_fetch(base_prediction_dict_h2))
-        sequence_h1 = ''.join([label_decoder[base] for base in predicted_base_labels_h1])
-        sequence_h2 = ''.join([label_decoder[base] for base in predicted_base_labels_h2])
-
-        candidates_h1 = get_candidates(reference_sequence, sequence_h1, start_pos, end_pos, hp_tag=1)
-        candidates_h2 = get_candidates(reference_sequence, sequence_h2, start_pos, end_pos, hp_tag=2)
-
-        all_candidates_h1.extend(candidates_h1)
-        all_candidates_h2.extend(candidates_h2)
+        # all_positions = sorted(all_positions)
+        # start_pos, end_pos = all_positions[0][0], all_positions[-1][0]
+        #
+        # reference_sequence = fasta_handler.get_reference_sequence(contig,
+        #                                                           start_pos,
+        #                                                           end_pos + 1)
+        # # group adjacent candidates
+        # all_groups_h1 = group_adjacent_mismatches(sorted(all_mismatches_h1, key=operator.itemgetter(0, 1)))
+        # all_groups_h2 = group_adjacent_mismatches(sorted(all_mismatches_h2, key=operator.itemgetter(0, 1)))
+        #
+        # for mismatch_group in all_groups_h1:
+        #     variant = mismatch_groups_to_variants(mismatch_group)
+        #
+        # print(all_groups_h1, all_groups_h2)
+        # exit()
+        #
+        # print(all_mismatches_h1)
+        # print(all_mismatches_h2)
+        # exit()
+        #
+        # all_candidates_h1.extend(candidates_h1)
+        # all_candidates_h2.extend(candidates_h2)
 
     sys.stderr.write("ONE THREAD COMPLETE\n")
     sys.stderr.write("TIME ELAPSED: " + str(time.time() - start_time) + "\n")
-    return contig, all_candidates_h1, all_candidates_h2
+    return contig, all_mismatches_h1, all_mismatches_h2
 
 
 def find_candidates(hdf5_file_path,  reference_file_path, contig, sequence_chunk_keys, threads):
@@ -334,9 +404,10 @@ def find_candidates(hdf5_file_path,  reference_file_path, contig, sequence_chunk
 
     sequence_chunk_key_list = sorted(sequence_chunk_key_list, key=lambda element: (element[1], element[2]))
 
-    candidate_positional_map_h1 = defaultdict(list)
-    candidate_positional_map_h2 = defaultdict()
-    all_candidate_positions = set()
+    all_mismatches_h1 = list()
+    all_mismatches_h2 = list()
+    all_positions_h1 = set()
+    all_positions_h2 = set()
     # generate the dictionary in parallel
     with concurrent.futures.ProcessPoolExecutor(max_workers=threads) as executor:
         file_chunks = chunks(sequence_chunk_key_list, max(MIN_SEQUENCE_REQUIRED_FOR_MULTITHREADING,
@@ -346,19 +417,39 @@ def find_candidates(hdf5_file_path,  reference_file_path, contig, sequence_chunk
                    for file_chunk in file_chunks]
         for fut in concurrent.futures.as_completed(futures):
             if fut.exception() is None:
-                contig, candidates_h1, candidates_h2 = fut.result()
+                contig, mismatches_h1, mismatches_h2 = fut.result()
 
-                sys.stderr.write("UPDATING CANDIDATE DICTIONARY\n")
-                for candidate in candidates_h1:
-                    all_candidate_positions.add(candidate[0])
-                    candidate_positional_map_h1[candidate[0]] = candidate
-                for candidate in candidates_h2:
-                    all_candidate_positions.add(candidate[0])
-                    candidate_positional_map_h2[candidate[0]] = candidate
+                sys.stderr.write("UPDATING DICTIONARY\n")
+                for pos, indx, ref, alt in mismatches_h1:
+                    if (pos, indx) not in all_positions_h1:
+                        all_positions_h1.add((pos, indx))
+                        all_mismatches_h1.append((pos, indx, ref, alt))
+
+                for pos, indx, ref, alt in mismatches_h2:
+                    if (pos, indx) not in all_positions_h2:
+                        all_positions_h2.add((pos, indx))
+                        all_mismatches_h2.append((pos, indx, ref, alt))
             else:
                 sys.stderr.write("ERROR: " + str(fut.exception()) + "\n")
             fut._result = None  # python issue 27144
 
-    # all_candidates = list(sorted(all_candidates, key=lambda element: (element[1], element[2])))
+    all_groups_h1 = group_adjacent_mismatches(sorted(all_mismatches_h1, key=operator.itemgetter(0, 1)))
+    all_groups_h2 = group_adjacent_mismatches(sorted(all_mismatches_h2, key=operator.itemgetter(0, 1)))
+
+    all_candidate_positions = set()
+    candidate_positional_map_h1 = defaultdict(lambda: list)
+    candidate_positional_map_h2 = defaultdict(lambda: list)
+
+    for mismatch_group in all_groups_h1:
+        print(mismatch_group)
+        variant_h1 = mismatch_groups_to_variants(mismatch_group)
+        all_candidate_positions.add(variant_h1[0])
+        candidate_positional_map_h1[variant_h1[0]] = variant_h1
+
+    for mismatch_group in all_groups_h2:
+        print(mismatch_group)
+        variant_h2 = mismatch_groups_to_variants(mismatch_group)
+        all_candidate_positions.add(variant_h2[0])
+        candidate_positional_map_h2[variant_h2[0]] = variant_h2
 
     return all_candidate_positions, candidate_positional_map_h1, candidate_positional_map_h2

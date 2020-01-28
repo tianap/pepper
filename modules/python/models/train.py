@@ -148,40 +148,31 @@ def train(train_file, test_file, batch_size, epoch_limit, gpu_mode, num_workers,
                     hidden_h2 = hidden_h2.cuda()
 
                 for i in range(0, ImageSizeOptions.SEQ_LENGTH, TrainOptions.WINDOW_JUMP):
-                    model_optimizer.zero_grad()
                     if i + TrainOptions.TRAIN_WINDOW > ImageSizeOptions.SEQ_LENGTH:
                         break
-
                     image_chunk_h  = images[:, 0, i:i+TrainOptions.TRAIN_WINDOW]
                     image_chunk_h1 = images[:, 1, i:i+TrainOptions.TRAIN_WINDOW]
                     image_chunk_h2 = images[:, 2, i:i+TrainOptions.TRAIN_WINDOW]
                     label_chunk_h1 = labels[:, 0, i:i+TrainOptions.TRAIN_WINDOW]
                     label_chunk_h2 = labels[:, 1, i:i+TrainOptions.TRAIN_WINDOW]
 
-                    hap_1_tensor = torch.cat((image_chunk_h, image_chunk_h1, image_chunk_h2), 2)
-                    hap_2_tensor = torch.cat((image_chunk_h, image_chunk_h2, image_chunk_h1), 2)
-
-                    # print()
-                    # image_chunk_h = hap_1_tensor[0, :, :]
-                    # print(image_chunk_h.size())
-                    # for i, row in enumerate(image_chunk_h):
-                    #     print("%c"%decode_labels[int(label_chunk_h1[0][i].item())], end='')
-                    #     for item in row:
-                    #         print("%5d"%item.item(), end='')
-                    #     print()
-                    # print()
-                    # exit()
-
-                    out_h1, out_h2, hidden_h1, hidden_h2 = \
-                        transducer_model(hap_1_tensor, hap_2_tensor, hidden_h1, hidden_h2)
+                    # train on H1
+                    model_optimizer.zero_grad()
+                    out_h1, hidden_h1 = transducer_model(image_chunk_h1, hidden_h1)
 
                     h1_loss = criterion(out_h1.contiguous().view(-1, num_classes), label_chunk_h1.contiguous().view(-1))
-                    h2_loss = criterion(out_h2.contiguous().view(-1, num_classes), label_chunk_h2.contiguous().view(-1))
-                    loss = h1_loss + h2_loss
-
-                    loss.backward()
+                    h1_loss.backward()
                     model_optimizer.step()
 
+                    # train on H2
+                    model_optimizer.zero_grad()
+                    out_h2, hidden_h2 = transducer_model(image_chunk_h2, hidden_h2)
+
+                    h2_loss = criterion(out_h2.contiguous().view(-1, num_classes), label_chunk_h2.contiguous().view(-1))
+                    h2_loss.backward()
+                    model_optimizer.step()
+
+                    loss = h1_loss + h2_loss
                     total_loss += loss.item()
                     total_images += image_chunk_h.size(0)
 
