@@ -320,6 +320,11 @@ def small_chunk_stitch(file_name, reference_file_path, contig, small_chunk_keys)
 
     all_mismatches_h1 = list()
     all_mismatches_h2 = list()
+    all_h1_positions = list()
+    all_h2_positions = list()
+    all_h1_anchors = list()
+    all_h2_anchors = list()
+    position_to_ref_base = defaultdict()
     # Find candidates per chunk
     for contig_name, _st, _end in small_chunk_keys:
         all_positions = set()
@@ -350,7 +355,9 @@ def small_chunk_stitch(file_name, reference_file_path, contig, small_chunk_keys)
             delete_anchors_h2, insert_anchors_h2 = get_anchor_positions(base_predictions_h2, ref_seq, indices, positions)
             all_anchors_h1 = insert_anchors_h1 + delete_anchors_h1
             all_anchors_h2 = insert_anchors_h2 + delete_anchors_h2
-            all_anchors = all_anchors_h1 + all_anchors_h2
+            all_h1_anchors.extend(all_anchors_h1)
+            all_h2_anchors.extend(all_anchors_h2)
+
             # as I have carried the reference sequence over, we will get the candidates naturally
             for pos, indx, ref_base, base_pred_h1, base_pred_h2, cov_h1, cov_h2 in zip(positions,
                                                                        indices,
@@ -361,48 +368,36 @@ def small_chunk_stitch(file_name, reference_file_path, contig, small_chunk_keys)
                                                                        coverage[2]):
                 if indx < 0 or pos < 0:
                     continue
-                if indx == 0 and pos in all_anchors:
-                    if pos in all_anchors_h1 or ref_base != base_pred_h1:
-                        all_mismatches_h1.append((pos, indx, ref_base, base_pred_h1))
-                    if pos in all_anchors_h2 or ref_base != base_pred_h2:
-                        all_mismatches_h2.append((pos, indx, ref_base, base_pred_h2))
-                    all_positions.add((pos, indx))
-                elif (pos, indx) not in all_positions:
+                if indx == 0:
+                    position_to_ref_base[pos] = ref_base
+
+                if (pos, indx) not in all_positions:
                     if ref_base != base_pred_h1:
                         if cov_h1 >= 2:
                             all_mismatches_h1.append((pos, indx, ref_base, base_pred_h1))
+                            if indx == 0:
+                                all_h1_positions.append(pos)
                     if ref_base != base_pred_h2:
                         if cov_h2 >= 2:
                             all_mismatches_h2.append((pos, indx, ref_base, base_pred_h2))
+                            if indx == 0:
+                                all_h2_positions.append(pos)
                     all_positions.add((pos, indx))
                     highest_index_per_pos[pos] = max(highest_index_per_pos[pos], indx)
 
+    # now add all the anchor positions
+    for pos in all_h1_anchors:
+        ref_base = position_to_ref_base[pos]
+        if pos not in all_h1_positions:
+            all_mismatches_h1.append((pos, 0, ref_base, ref_base))
+            all_h1_positions.append(pos)
 
-        # now find the sequences and find all the candidates
-        # all_positions = sorted(all_positions)
-        # start_pos, end_pos = all_positions[0][0], all_positions[-1][0]
-        #
-        # reference_sequence = fasta_handler.get_reference_sequence(contig,
-        #                                                           start_pos,
-        #                                                           end_pos + 1)
-        # # group adjacent candidates
-        # all_groups_h1 = group_adjacent_mismatches(sorted(all_mismatches_h1, key=operator.itemgetter(0, 1)))
-        # all_groups_h2 = group_adjacent_mismatches(sorted(all_mismatches_h2, key=operator.itemgetter(0, 1)))
-        #
-        # for mismatch_group in all_groups_h1:
-        #     variant = mismatch_groups_to_variants(mismatch_group)
-        #
-        # print(all_groups_h1, all_groups_h2)
-        # exit()
-        #
-        # print(all_mismatches_h1)
-        # print(all_mismatches_h2)
-        # exit()
-        #
-        # all_candidates_h1.extend(candidates_h1)
-        # all_candidates_h2.extend(candidates_h2)
+    for pos in all_h2_anchors:
+        ref_base = position_to_ref_base[pos]
+        if pos not in all_h2_positions:
+            all_mismatches_h2.append((pos, 0, ref_base, ref_base))
+            all_h2_positions.append(pos)
 
-    sys.stderr.write("ONE THREAD COMPLETE\n")
     sys.stderr.write("TIME ELAPSED: " + str(time.time() - start_time) + "\n")
     return contig, all_mismatches_h1, all_mismatches_h2
 
