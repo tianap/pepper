@@ -30,12 +30,12 @@ class UserInterfaceView:
         self.fasta_handler = PEPPER.FASTA_handler(draft_file_path)
         self.train_mode = train_mode
         self.downsample_rate = 1.0
-        self.truth_bam_handler_h1 = None
-        self.truth_bam_handler_h2 = None
+        self.truth_bam_h1 = None
+        self.truth_bam_h2 = None
 
         if self.train_mode:
-            self.truth_bam_handler_h1 = PEPPER.BAM_handler(truth_bam_h1)
-            self.truth_bam_handler_h2 = PEPPER.BAM_handler(truth_bam_h2)
+            self.truth_bam_h1 = truth_bam_h1
+            self.truth_bam_h2 = truth_bam_h2
 
         # --- initialize names ---
         # name of the chromosome
@@ -55,11 +55,11 @@ class UserInterfaceView:
                                                    start_position,
                                                    end_position)
 
-        images, lables, positions, image_chunk_ids, all_ref_seq = alignment_summarizer.create_summary(self.truth_bam_handler_h1,
-                                                                                         self.truth_bam_handler_h2,
+        images, lables, positions, image_chunk_ids, all_ref_seq, coverages = alignment_summarizer.create_summary(self.truth_bam_h1,
+                                                                                         self.truth_bam_h2,
                                                                                          self.train_mode)
 
-        return images, lables, positions, image_chunk_ids, all_ref_seq
+        return images, lables, positions, image_chunk_ids, all_ref_seq, coverages
 
 
 class UserInterfaceSupport:
@@ -163,10 +163,10 @@ class UserInterfaceSupport:
                                  truth_bam_h2=truth_bam_h2,
                                  train_mode=train_mode)
 
-        images, labels, positions, image_chunk_ids, ref_seq = view.parse_region(_start, _end)
+        images, labels, positions, image_chunk_ids, ref_seq, coverages = view.parse_region(_start, _end)
         region = (chr_name, _start, _end)
 
-        return images, labels, positions, image_chunk_ids, region, ref_seq
+        return images, labels, positions, image_chunk_ids, region, ref_seq, coverages
 
     @staticmethod
     def image_generator(args, all_intervals, total_threads, thread_id):
@@ -188,16 +188,17 @@ class UserInterfaceSupport:
             for counter, interval in enumerate(intervals):
                 chr_name, _start, _end = interval
                 img_args = (chr_name, bam_file, draft_file, truth_bam_h1, truth_bam_h2, train_mode)
-                images, labels, positions, chunk_ids, region, ref_seqs = UserInterfaceSupport.single_worker(img_args, _start, _end)
+                images, labels, positions, chunk_ids, region, ref_seqs, coverages = UserInterfaceSupport.single_worker(img_args, _start, _end)
 
                 for i, image in enumerate(images):
                     label = labels[i]
                     position, index = zip(*positions[i])
                     ref_seq = ref_seqs[i]
                     chunk_id = chunk_ids[i]
+                    coverage = coverages[i]
                     summary_name = str(region[0]) + "_" + str(region[1]) + "_" + str(region[2]) + "_" + str(chunk_id)
 
-                    output_hdf_file.write_summary(region, image, label, position, index, chunk_id, summary_name, ref_seq)
+                    output_hdf_file.write_summary(region, image, label, position, index, chunk_id, summary_name, ref_seq, coverage)
 
                 if counter > 0 and counter % 100 == 0:
                     percent_complete = int((100 * counter) / len(intervals))

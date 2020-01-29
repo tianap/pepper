@@ -18,6 +18,7 @@ PYBIND11_MODULE(PEPPER, m) {
         py::class_<SummaryGenerator>(m, "SummaryGenerator")
             .def(py::init<const string &, const string &, long long &, long long &>())
             .def_readwrite("genomic_pos", &SummaryGenerator::genomic_pos)
+            .def_readwrite("coverage_count", &SummaryGenerator::coverage_count)
             .def_readwrite("ref_image", &SummaryGenerator::ref_image)
             .def_readwrite("labels", &SummaryGenerator::labels)
             .def_readwrite("image", &SummaryGenerator::image)

@@ -51,7 +51,7 @@ def predict(test_file, output_filename, model_path, batch_size, threads, num_wor
     sys.stderr.write(TextColor.CYAN + 'MODEL LOADED\n')
 
     with torch.no_grad():
-        for contig, contig_start, contig_end, chunk_id, images, position, index, ref_seq, labels in tqdm(test_loader, ncols=50):
+        for contig, contig_start, contig_end, chunk_id, images, position, index, ref_seq, coverage, labels in tqdm(test_loader, ncols=50):
             sys.stderr.flush()
             images = images.type(torch.FloatTensor)
             if gpu_mode:
@@ -94,6 +94,7 @@ def predict(test_file, output_filename, model_path, batch_size, threads, num_wor
                 prediction_data_file.write_prediction(contig[i], contig_start[i], contig_end[i], chunk_id[i],
                                                       position[i], index[i],
                                                       ref_seq[i],
+                                                      coverage[i],
                                                       prediction_base_probs_h1[i],
                                                       prediction_base_probs_h2[i],
                                                       predicted_base_labels_h1[i],

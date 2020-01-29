@@ -283,7 +283,13 @@ def mismatch_groups_to_variants(mismatch_group):
 
     mismatch_group = sorted(mismatch_group, key=operator.itemgetter(0, 1))
     start_pos = mismatch_group[0][0]
+    start_indx = mismatch_group[0][1]
     end_pos = mismatch_group[-1][0]
+    start_alt = mismatch_group[0][3]
+    start_ref = mismatch_group[0][2]
+
+    if start_indx > 0 or start_alt == 0 or start_ref == 0:
+        return None
     ref_allele = []
     alt_allele = []
     for pos, indx, ref, alt in mismatch_group:
@@ -333,6 +339,7 @@ def small_chunk_stitch(file_name, reference_file_path, contig, small_chunk_keys)
                 positions = hdf5_file['predictions'][contig][chunk_name][chunk]['position'][()]
                 indices = hdf5_file['predictions'][contig][chunk_name][chunk]['index'][()]
                 ref_seq = hdf5_file['predictions'][contig][chunk_name][chunk]['ref_seq'][()]
+                coverage = hdf5_file['predictions'][contig][chunk_name][chunk]['coverage'][()]
 
             positions = np.array(positions, dtype=np.int64)
             base_predictions_h1 = np.array(bases_h1, dtype=np.int)
@@ -344,13 +351,14 @@ def small_chunk_stitch(file_name, reference_file_path, contig, small_chunk_keys)
             all_anchors_h1 = insert_anchors_h1 + delete_anchors_h1
             all_anchors_h2 = insert_anchors_h2 + delete_anchors_h2
             all_anchors = all_anchors_h1 + all_anchors_h2
-
             # as I have carried the reference sequence over, we will get the candidates naturally
-            for pos, indx, ref_base, base_pred_h1, base_pred_h2 in zip(positions,
+            for pos, indx, ref_base, base_pred_h1, base_pred_h2, cov_h1, cov_h2 in zip(positions,
                                                                        indices,
                                                                        ref_seq,
                                                                        base_predictions_h1,
-                                                                       base_predictions_h2):
+                                                                       base_predictions_h2,
+                                                                       coverage[1],
+                                                                       coverage[2]):
                 if indx < 0 or pos < 0:
                     continue
                 if indx == 0 and pos in all_anchors:
@@ -361,9 +369,11 @@ def small_chunk_stitch(file_name, reference_file_path, contig, small_chunk_keys)
                     all_positions.add((pos, indx))
                 elif (pos, indx) not in all_positions:
                     if ref_base != base_pred_h1:
-                        all_mismatches_h1.append((pos, indx, ref_base, base_pred_h1))
+                        if cov_h1 >= 2:
+                            all_mismatches_h1.append((pos, indx, ref_base, base_pred_h1))
                     if ref_base != base_pred_h2:
-                        all_mismatches_h2.append((pos, indx, ref_base, base_pred_h2))
+                        if cov_h2 >= 2:
+                            all_mismatches_h2.append((pos, indx, ref_base, base_pred_h2))
                     all_positions.add((pos, indx))
                     highest_index_per_pos[pos] = max(highest_index_per_pos[pos], indx)
 
@@ -443,13 +453,19 @@ def find_candidates(hdf5_file_path,  reference_file_path, contig, sequence_chunk
     candidate_positional_map_h2 = defaultdict(lambda: list)
 
     for mismatch_group in all_groups_h1:
+        if not mismatch_group:
+            continue
         variant_h1 = mismatch_groups_to_variants(mismatch_group)
-        all_candidate_positions.add(variant_h1[0])
-        candidate_positional_map_h1[variant_h1[0]] = variant_h1
+        if variant_h1 is not None:
+            all_candidate_positions.add(variant_h1[0])
+            candidate_positional_map_h1[variant_h1[0]] = variant_h1
 
     for mismatch_group in all_groups_h2:
+        if not mismatch_group:
+            continue
         variant_h2 = mismatch_groups_to_variants(mismatch_group)
-        all_candidate_positions.add(variant_h2[0])
-        candidate_positional_map_h2[variant_h2[0]] = variant_h2
+        if variant_h2 is not None:
+            all_candidate_positions.add(variant_h2[0])
+            candidate_positional_map_h2[variant_h2[0]] = variant_h2
 
     return all_candidate_positions, candidate_positional_map_h1, candidate_positional_map_h2

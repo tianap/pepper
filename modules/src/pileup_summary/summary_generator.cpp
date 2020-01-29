@@ -86,10 +86,17 @@ void SummaryGenerator::iterate_over_read(type_read read, long long region_start,
                         coverage[make_pair(ref_position, 0)] += 1.0;
 
                         // update the summary of base if hp_tag is present
-                        if(hp_tag != 0) {
-                            Position ph(ref_position, 0, get_feature_index(base, read.flags.is_reverse), hp_tag);
+                        if(hp_tag == 0 || hp_tag == 1) {
+                            int add_to_tag = 1;
+                            Position ph(ref_position, 0, get_feature_index(base, read.flags.is_reverse), add_to_tag);
                             summaries[ph] += 1.0;
-                            coverage[make_pair(ref_position, hp_tag)] += 1.0;
+                            coverage[make_pair(ref_position, add_to_tag)] += 1.0;
+                        }
+                        if(hp_tag == 0 || hp_tag == 2) {
+                            int add_to_tag = 2;
+                            Position ph(ref_position, 0, get_feature_index(base, read.flags.is_reverse), add_to_tag);
+                            summaries[ph] += 1.0;
+                            coverage[make_pair(ref_position, add_to_tag)] += 1.0;
                         }
                     }
                     read_index += 1;
@@ -111,8 +118,14 @@ void SummaryGenerator::iterate_over_read(type_read read, long long region_start,
                         summaries[p] += 1.0;
 
                         // update the summary of base if hp_tag is present
-                        if(hp_tag != 0) {
-                            Position ph(ref_position - 1, i+1, get_feature_index(alt[i], read.flags.is_reverse), hp_tag);
+                        if(hp_tag == 0 || hp_tag == 1) {
+                            int add_to_tag = 1;
+                            Position ph(ref_position - 1, i+1, get_feature_index(alt[i], read.flags.is_reverse), add_to_tag);
+                            summaries[ph] += 1.0;
+                        }
+                        if(hp_tag == 0 || hp_tag == 2) {
+                            int add_to_tag = 2;
+                            Position ph(ref_position - 1, i+1, get_feature_index(alt[i], read.flags.is_reverse), add_to_tag);
                             summaries[ph] += 1.0;
                         }
                     }
@@ -132,13 +145,20 @@ void SummaryGenerator::iterate_over_read(type_read read, long long region_start,
                         // update the summary of base
                         Position p(ref_position + i, 0, get_feature_index('*', read.flags.is_reverse));
                         summaries[p] += 1.0;
-                        coverage[make_pair(ref_position, 0)] += 1.0;
+                        coverage[make_pair(ref_position + i, 0)] += 1.0;
 
                         // update the summary of base if hp_tag is present
-                        if(hp_tag != 0) {
-                            Position ph(ref_position + i, 0, get_feature_index('*', read.flags.is_reverse), hp_tag);
+                        if(hp_tag == 0 || hp_tag == 1) {
+                            int add_to_tag = 1;
+                            Position ph(ref_position + i, 0, get_feature_index('*', read.flags.is_reverse), add_to_tag);
                             summaries[ph] += 1.0;
-                            coverage[make_pair(ref_position + i, hp_tag)] += 1.0;
+                            coverage[make_pair(ref_position + i, add_to_tag)] += 1.0;
+                        }
+                        if(hp_tag == 0 || hp_tag == 2) {
+                            int add_to_tag = 2;
+                            Position ph(ref_position + i, 0, get_feature_index('*', read.flags.is_reverse), add_to_tag);
+                            summaries[ph] += 1.0;
+                            coverage[make_pair(ref_position + i, add_to_tag)] += 1.0;
                         }
                     }
                 }
@@ -329,6 +349,8 @@ void SummaryGenerator::generate_image(long long start_pos, long long end_pos) {
     // at this point labels and positions are generated, now generate the pileup
     for (int hp_tag = 0; hp_tag < 3; hp_tag++) {
         vector< vector<uint8_t> > image_hp;
+        vector<int> cov;
+
         for (long long ref_pos = start_pos; ref_pos <= end_pos; ref_pos++) {
             vector <uint8_t> row;
             uint8_t pixel_value = 0;
@@ -342,6 +364,7 @@ void SummaryGenerator::generate_image(long long start_pos, long long end_pos) {
             }
             assert(row.size() == 10);
             image_hp.push_back(row);
+            cov.push_back(coverage[make_pair(ref_pos, hp_tag)]);
 
             if (longest_insert_count[ref_pos] > 0) {
 
@@ -355,15 +378,18 @@ void SummaryGenerator::generate_image(long long start_pos, long long end_pos) {
                         if(summaries.find(p) != summaries.end())
                             pixel_value = (summaries[p] / max(1.0, coverage[make_pair(ref_pos, hp_tag)])) * ImageOptions::MAX_COLOR_VALUE;
                         ins_row.push_back(pixel_value);
-
                     }
                     assert(ins_row.size() == 10);
                     image_hp.push_back(ins_row);
+                    cov.push_back(coverage[make_pair(ref_pos, hp_tag)]);
                 }
             }
         }
+
         assert(image_hp.size() == genomic_pos.size());
+        assert(cov.size() == genomic_pos.size());
         image.push_back(image_hp);
+        coverage_count.push_back(cov);
     }
 
 }

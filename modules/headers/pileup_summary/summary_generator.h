@@ -77,6 +77,7 @@ public:
     vector< vector<uint8_t> > labels;
     vector<pair<long long, int> > genomic_pos;
     vector<int> bad_label_positions;
+    vector< vector<int> > coverage_count;
 
     SummaryGenerator(string reference_sequence,
                      string chromosome_name,
