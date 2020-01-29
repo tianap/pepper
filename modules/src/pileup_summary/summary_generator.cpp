@@ -271,7 +271,7 @@ void SummaryGenerator::generate_labels(type_read read, int hp_tag, long long reg
 
 
 void SummaryGenerator::debug_print(long long start_pos, long long end_pos, bool print_label) {
-    cout<<"HERE"<<endl;
+    cout<<"REGION: "<<start_pos<<" "<<end_pos<<endl;
     for (int hp_tag = 0; hp_tag < 3; hp_tag++) {
         cout<<"HP TAG: "<< hp_tag <<endl;
         cout << setprecision(3);
@@ -399,8 +399,8 @@ void SummaryGenerator::generate_image(long long start_pos, long long end_pos) {
 void SummaryGenerator::generate_train_summary(vector <type_read> &reads,
                                               long long start_pos,
                                               long long end_pos,
-                                              type_read truth_read_h1,
-                                              type_read truth_read_h2) {
+                                              vector<type_read> &truth_reads_h1,
+                                              vector<type_read> &truth_reads_h2) {
     for (auto &read:reads) {
         // this populates summaries
         if(read.mapping_quality >= 10) {
@@ -409,8 +409,16 @@ void SummaryGenerator::generate_train_summary(vector <type_read> &reads,
     }
 
     // this populates base_labels and insert_labels dictionaries
-    generate_labels(truth_read_h1, 1, start_pos, end_pos + 1);
-    generate_labels(truth_read_h2, 2, start_pos, end_pos + 1);
+    for (auto &truth_read_h1:truth_reads_h1) {
+        // this populates summaries
+        generate_labels(truth_read_h1, 1, start_pos, end_pos + 1);
+    }
+
+
+    for (auto &truth_read_h2:truth_reads_h2) {
+        // this populates summaries
+        generate_labels(truth_read_h2, 2, start_pos, end_pos + 1);
+    }
 
     // after all the dictionaries are populated, we can simply walk through the region and generate a sequence
     for (long long pos = start_pos; pos <= end_pos; pos++) {

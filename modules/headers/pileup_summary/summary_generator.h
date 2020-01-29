@@ -90,8 +90,8 @@ public:
     void generate_train_summary(vector <type_read> &reads,
                                 long long start_pos,
                                 long long end_pos,
-                                type_read truth_read_h1,
-                                type_read truth_read_h2);
+                                vector<type_read> &truth_reads_h1,
+                                vector<type_read> &truth_reads_h2);
 
     void iterate_over_read(type_read read, long long region_start, long long region_end);
     int get_sequence_length(long long start_pos, long long end_pos);
