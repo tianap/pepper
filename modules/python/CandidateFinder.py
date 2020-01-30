@@ -15,6 +15,7 @@ import re
 
 BASE_ERROR_RATE = 0.0
 label_decoder = {1: 'A', 2: 'C', 3: 'G', 4: 'T', 0: ''}
+label_decoder_ref = {1: 'A', 2: 'C', 3: 'G', 4: 'T', 0: 'N'}
 label_decoder_snp = {1: 'A', 2: 'C', 3: 'G', 4: 'T', 0: '*'}
 MATCH_PENALTY = 4
 MISMATCH_PENALTY = 6
@@ -312,7 +313,7 @@ def mismatch_groups_to_variants(mismatch_group):
         else:
             alt_allele_2.append(ref_base)
 
-    ref_seq = ''.join(label_decoder[i] for i in ref_allele)
+    ref_seq = ''.join(label_decoder_ref[i] for i in ref_allele)
     alt1_seq = ''.join(label_decoder[i] for i in alt_allele_1)
     alt2_seq = ''.join(label_decoder[i] for i in alt_allele_2)
 
@@ -427,7 +428,7 @@ def small_chunk_stitch(file_name, reference_file_path, contig, small_chunk_keys)
             all_mismatches_h2.append((pos, 0, ref_base, ref_base))
             all_h2_positions.append(pos)
 
-    # sys.stderr.write("TIME ELAPSED: " + str(time.time() - start_time) + "\n")
+    sys.stderr.write("TIME ELAPSED: " + str(time.time() - start_time) + "\n")
     return contig, all_mismatches_h1, all_mismatches_h2
 
 
@@ -477,7 +478,7 @@ def find_candidates(hdf5_file_path,  reference_file_path, contig, sequence_chunk
     for mismatch_group in all_groups:
         if not mismatch_group:
             continue
-        # print("H1", mismatch_group)
+
         variant = mismatch_groups_to_variants(mismatch_group)
 
         if variant is not None:
