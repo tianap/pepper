@@ -19,7 +19,7 @@ def perform_stitch(hdf_file_path, reference_path, output_path, threads, sample_n
         with h5py.File(hdf_file_path, 'r') as hdf5_file:
             chunk_keys = sorted(hdf5_file['predictions'][contig].keys())
 
-        all_candidates = create_consensus_sequence(hdf_file_path, reference_path, contig, chunk_keys, threads)
+        all_candidates = create_consensus_sequence(hdf_file_path, contig, chunk_keys, threads)
         sys.stderr.write(TextColor.BLUE + "INFO: FINISHED PROCESSING " + contig + ", TOTAL CANDIDATES FOUND: "
                          + str(len(all_candidates)) + ".\n" + TextColor.END)
         vcf_file.write_vcf_records(contig, all_candidates)

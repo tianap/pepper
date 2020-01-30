@@ -54,11 +54,12 @@ class UserInterfaceView:
                                                    start_position,
                                                    end_position)
 
-        images, lables, positions, image_chunk_ids = alignment_summarizer.create_summary(self.truth_bam_handler_h1,
-                                                                                         self.truth_bam_handler_h2,
-                                                                                         self.train_mode)
+        images, lables, positions, image_chunk_ids, ref_seqs = \
+            alignment_summarizer.create_summary(self.truth_bam_handler_h1,
+                                                self.truth_bam_handler_h2,
+                                                self.train_mode)
 
-        return images, lables, positions, image_chunk_ids
+        return images, lables, positions, image_chunk_ids, ref_seqs
 
 
 class UserInterfaceSupport:
@@ -162,10 +163,10 @@ class UserInterfaceSupport:
                                  truth_bam_h2=truth_bam_h2,
                                  train_mode=train_mode)
 
-        images, labels, positions, image_chunk_ids = view.parse_region(_start, _end)
+        images, labels, positions, image_chunk_ids, ref_seqs = view.parse_region(_start, _end)
         region = (chr_name, _start, _end)
 
-        return images, labels, positions, image_chunk_ids, region
+        return images, labels, positions, image_chunk_ids, ref_seqs, region
 
     @staticmethod
     def image_generator(args, all_intervals, total_threads, thread_id):
@@ -187,16 +188,18 @@ class UserInterfaceSupport:
             for counter, interval in enumerate(intervals):
                 chr_name, _start, _end = interval
                 img_args = (chr_name, bam_file, draft_file, truth_bam_h1, truth_bam_h2, train_mode)
-                images, labels, positions, chunk_ids, region = UserInterfaceSupport.single_worker(img_args, _start, _end)
+                images, labels, positions, chunk_ids, ref_seqs, region = \
+                    UserInterfaceSupport.single_worker(img_args, _start, _end)
 
                 for i, image in enumerate(images):
                     label = labels[i]
                     position, index = zip(*positions[i])
                     chunk_id = chunk_ids[i]
+                    ref_seq = ref_seqs[i]
 
                     summary_name = str(region[0]) + "_" + str(region[1]) + "_" + str(region[2]) + "_" + str(chunk_id)
 
-                    output_hdf_file.write_summary(region, image, label, position, index, chunk_id, summary_name)
+                    output_hdf_file.write_summary(region, image, label, position, index, chunk_id, ref_seq, summary_name)
 
                 if counter > 0 and counter % 100 == 0:
                     percent_complete = int((100 * counter) / len(intervals))

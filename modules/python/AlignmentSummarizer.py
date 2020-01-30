@@ -26,10 +26,12 @@ class AlignmentSummarizer:
         labels = []
         positions = []
         chunk_ids = []
+        ref_seq = []
 
         while True:
             image_chunk = summary.image[chunk_start:chunk_end]
             pos_chunk = summary.genomic_pos[chunk_start:chunk_end]
+            ref_chunk = summary.ref_image[chunk_start:chunk_end]
             label_chunk = [0] * (chunk_end - chunk_start)
 
             assert (len(image_chunk) == len(pos_chunk) == len(label_chunk))
@@ -39,14 +41,16 @@ class AlignmentSummarizer:
             if padding_required > 0:
                 label_chunk = label_chunk + [0] * padding_required
                 pos_chunk = pos_chunk + [(-1, -1)] * padding_required
+                ref_chunk = ref_chunk + [0] * padding_required
                 image_chunk = image_chunk + [[0.0] * ImageSizeOptions.IMAGE_HEIGHT] * padding_required
 
-            assert (len(image_chunk) == len(pos_chunk) == len(label_chunk) == ImageSizeOptions.SEQ_LENGTH)
+            assert (len(image_chunk) == len(pos_chunk) == len(label_chunk) == len(ref_chunk) == ImageSizeOptions.SEQ_LENGTH)
 
             images.append(image_chunk)
             labels.append(label_chunk)
             positions.append(pos_chunk)
             chunk_ids.append(chunk_id)
+            ref_seq.append(ref_chunk)
             chunk_id += 1
 
             if chunk_end == len(summary.genomic_pos):
@@ -55,12 +59,13 @@ class AlignmentSummarizer:
             chunk_start = chunk_end - chunk_overlap
             chunk_end = min(len(summary.genomic_pos), chunk_start + chunk_size)
 
-        return images, labels, positions, chunk_ids
+        return images, labels, positions, chunk_ids, ref_seq
 
     @staticmethod
     def chunk_images_train(summary, chunk_size, chunk_overlap):
         images = []
         labels = []
+        ref_seq = []
         positions = []
         chunk_ids = []
 
@@ -79,16 +84,17 @@ class AlignmentSummarizer:
                         break
                     if i > 0 and chunk_start < bad_indices[i-1]:
                         break
-
                 image_chunk = summary.image[chunk_start:chunk_end]
                 pos_chunk = summary.genomic_pos[chunk_start:chunk_end]
+                ref_seq_chunk = summary.ref_image[chunk_start:chunk_end]
                 label_chunk = summary.labels[chunk_start:chunk_end]
 
-                assert (len(image_chunk) == len(pos_chunk) == len(label_chunk) == chunk_size)
+                assert (len(image_chunk) == len(pos_chunk) == len(ref_seq_chunk) == len(label_chunk) == chunk_size)
 
                 images.append(image_chunk)
                 labels.append(label_chunk)
                 positions.append(pos_chunk)
+                ref_seq.append(ref_seq_chunk)
                 chunk_ids.append(chunk_id)
                 chunk_id += 1
 
@@ -99,10 +105,9 @@ class AlignmentSummarizer:
                 chunk_end = min(bad_indices[i], chunk_start + chunk_size)
 
             chunk_start = chunk_end + 1
+        assert(len(images) == len(labels) == len(positions) == len(chunk_ids) == len(ref_seq))
 
-        assert(len(images) == len(labels) == len(positions) == len(chunk_ids))
-
-        return images, labels, positions, chunk_ids
+        return images, labels, positions, chunk_ids, ref_seq
 
     @staticmethod
     def overlap_length_between_ranges(range_a, range_b):
@@ -202,6 +207,7 @@ class AlignmentSummarizer:
                      + str(self.region_end_position) + "]"
         all_images = []
         all_labels = []
+        all_ref_seq = []
         all_positions = []
         all_image_chunk_ids = []
 
@@ -263,7 +269,7 @@ class AlignmentSummarizer:
             if not truth_regions:
                 # sys.stderr.write(TextColor.GREEN + "INFO: " + log_prefix + " NO TRAINING REGION FOUND.\n"
                 #                  + TextColor.END)
-                return [], [], [], []
+                return [], [], [], [], []
 
             for region_start, region_end in truth_regions:
                 truth_reads_h1 = truth_bam_handler_h1.get_reads(self.chromosome_name,
@@ -317,8 +323,8 @@ class AlignmentSummarizer:
                                 sample[j] = read
                     all_reads = sample
 
-                # sys.stderr.write(TextColor.GREEN + "INFO: " + log_prefix + " TOTAL " + str(total_reads)
-                #                  + " READS FOUND.\n" + TextColor.END)
+                sys.stderr.write(TextColor.GREEN + "INFO: " + log_prefix + " TOTAL " + str(total_reads)
+                                 + " READS FOUND.\n" + TextColor.END)
 
                 start_time = time.time()
 
@@ -338,17 +344,20 @@ class AlignmentSummarizer:
                 summary_generator.generate_train_summary(all_reads,
                                                          region_start,
                                                          region_end,
-                                                         truth_reads_h1[0],
-                                                         truth_reads_h2[0])
+                                                         truth_reads_h1,
+                                                         truth_reads_h2)
 
-                images, labels, positions, chunk_ids = self.chunk_images_train(summary_generator,
-                                                                               chunk_size=ImageSizeOptions.SEQ_LENGTH,
-                                                                               chunk_overlap=ImageSizeOptions.SEQ_OVERLAP)
+                images, labels, positions, chunk_ids, ref_seq = \
+                    self.chunk_images_train(summary_generator,
+                                            chunk_size=ImageSizeOptions.SEQ_LENGTH,
+                                            chunk_overlap=ImageSizeOptions.SEQ_OVERLAP)
+
 
                 all_images.extend(images)
                 all_labels.extend(labels)
                 all_positions.extend(positions)
                 all_image_chunk_ids.extend(chunk_ids)
+                all_ref_seq.extend(ref_seq)
         else:
             # HERE REALIGN THE READS TO THE REFERENCE THEN GENERATE THE SUMMARY TO GET A POLISHED HAPLOTYPE
             read_start = max(0, self.region_start_position)
@@ -363,7 +372,7 @@ class AlignmentSummarizer:
             total_reads = len(all_reads)
 
             if total_reads == 0:
-                return [], [], [], []
+                return [], [], [], [], []
 
             if total_reads > AlingerOptions.MAX_READS_IN_REGION:
                 # https://github.com/google/nucleus/blob/master/nucleus/util/utils.py
@@ -404,7 +413,7 @@ class AlignmentSummarizer:
                                                self.region_start_position,
                                                self.region_end_position)
 
-            images, labels, positions, chunk_ids = \
+            images, labels, positions, chunk_ids, ref_seq = \
                 self.chunk_images(summary_generator,
                                   chunk_size=ImageSizeOptions.SEQ_LENGTH,
                                   chunk_overlap=ImageSizeOptions.SEQ_OVERLAP)
@@ -413,7 +422,8 @@ class AlignmentSummarizer:
             all_labels.extend(labels)
             all_positions.extend(positions)
             all_image_chunk_ids.extend(chunk_ids)
+            all_ref_seq.extend(ref_seq)
 
-        assert(len(all_images) == len(all_labels) == len(all_image_chunk_ids))
+        assert(len(all_images) == len(all_labels) == len(all_image_chunk_ids) == len(all_ref_seq))
 
-        return all_images, all_labels, all_positions, all_image_chunk_ids
+        return all_images, all_labels, all_positions, all_image_chunk_ids, all_ref_seq

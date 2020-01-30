@@ -56,8 +56,9 @@ class SequenceDataset(Dataset):
             chunk_id = hdf5_file['summaries'][image_name]['chunk_id'][()]
             contig_start = hdf5_file['summaries'][image_name]['region_start'][()]
             contig_end = hdf5_file['summaries'][image_name]['region_end'][()]
+            ref_seq = hdf5_file['summaries'][image_name]['ref_seq'][()]
 
-        return contig, contig_start, contig_end, chunk_id, image, position, index
+        return contig, contig_start, contig_end, chunk_id, image, position, index, ref_seq
 
     def __len__(self):
         return len(self.all_images)

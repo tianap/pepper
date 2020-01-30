@@ -32,6 +32,16 @@ int get_feature_index(char base, bool is_reverse) {
 }
 
 
+int get_reference_feature_index(char base) {
+    base = toupper(base);
+    if (base == 'A') return 1;
+    if (base == 'C') return 2;
+    if (base == 'G') return 3;
+    if (base == 'T') return 4;
+    return 0;
+}
+
+
 uint8_t get_labels(char base_h1, char base_h2) {
     base_h1 = toupper(base_h1);
     base_h2 = toupper(base_h2);
@@ -174,15 +184,14 @@ bool check_base(char base) {
     return false;
 }
 
-void SummaryGenerator::generate_labels(type_read truth_read_h1, type_read truth_read_h2,
-        long long region_start, long long region_end) {
+void SummaryGenerator::generate_labels(type_read truth_read, long long region_start, long long region_end, int hp_tag) {
     int read_index = 0;
-    long long ref_position = truth_read_h1.pos;
+    long long ref_position = truth_read.pos;
     int cigar_index = 0;
     int base_quality = 0;
     long long reference_index;
 
-    for (auto &cigar: truth_read_h1.cigar_tuples) {
+    for (auto &cigar: truth_read.cigar_tuples) {
         if (ref_position > region_end) break;
         switch (cigar.operation) {
             case CIGAR_OPERATIONS::EQUAL:
@@ -198,8 +207,11 @@ void SummaryGenerator::generate_labels(type_read truth_read_h1, type_read truth_
                     reference_index = ref_position - ref_start;
 //                    cout<<ref_position<<" "<<ref_end<<" "<<region_end<<endl;
                     if (ref_position >= ref_start && ref_position <= ref_end) {
-                        char base = truth_read_h1.sequence[read_index];
-                        base_labels_h1[ref_position] = base;
+                        char base = truth_read.sequence[read_index];
+                        if(hp_tag == 1)
+                            base_labels_h1[ref_position] = base;
+                        else if(hp_tag == 2)
+                            base_labels_h2[ref_position] = base;
                     }
                     read_index += 1;
                     ref_position += 1;
@@ -211,7 +223,7 @@ void SummaryGenerator::generate_labels(type_read truth_read_h1, type_read truth_
                     ref_position - 1 <= ref_end) {
                     // process insert allele here
                     string alt;
-                    alt = truth_read_h1.sequence.substr(read_index, cigar.length);
+                    alt = truth_read.sequence.substr(read_index, cigar.length);
 
                     for (int i = 0; i < longest_insert_count[ref_position - 1]; i++) {
                         char base = '#';
@@ -219,7 +231,11 @@ void SummaryGenerator::generate_labels(type_read truth_read_h1, type_read truth_
                             base = alt[i];
                         }
                         pair<long long, int> position_pair = make_pair(ref_position - 1, i);
-                        insert_labels_h1[position_pair] = base;
+                        if(hp_tag == 1)
+                            insert_labels_h1[position_pair] = base;
+                        else if(hp_tag == 2)
+                            insert_labels_h2[position_pair] = base;
+
                     }
                 }
                 read_index += cigar.length;
@@ -235,80 +251,10 @@ void SummaryGenerator::generate_labels(type_read truth_read_h1, type_read truth_
                         if (ref_position + i >= ref_start && ref_position + i <= ref_end) {
                             // DELETE
                             char base = '*';
-                            base_labels_h1[ref_position + i] = '*';
-                        }
-                    }
-                }
-                ref_position += cigar.length;
-                break;
-            case CIGAR_OPERATIONS::SOFT_CLIP:
-                read_index += cigar.length;
-                break;
-            case CIGAR_OPERATIONS::HARD_CLIP:
-                break;
-        }
-    }
-
-
-    read_index = 0;
-    ref_position = truth_read_h2.pos;
-    cigar_index = 0;
-    base_quality = 0;
-
-    for (auto &cigar: truth_read_h2.cigar_tuples) {
-        if (ref_position > region_end) break;
-        switch (cigar.operation) {
-            case CIGAR_OPERATIONS::EQUAL:
-            case CIGAR_OPERATIONS::DIFF:
-            case CIGAR_OPERATIONS::MATCH:
-                cigar_index = 0;
-                if (ref_position < ref_start) {
-                    cigar_index = min(ref_start - ref_position, (long long) cigar.length);
-                    read_index += cigar_index;
-                    ref_position += cigar_index;
-                }
-                for (int i = cigar_index; i < cigar.length; i++) {
-                    reference_index = ref_position - ref_start;
-//                    cout<<ref_position<<" "<<ref_end<<" "<<region_end<<endl;
-                    if (ref_position >= ref_start && ref_position <= ref_end) {
-                        char base = truth_read_h2.sequence[read_index];
-                        base_labels_h2[ref_position] = base;
-                    }
-                    read_index += 1;
-                    ref_position += 1;
-                }
-                break;
-            case CIGAR_OPERATIONS::IN:
-                reference_index = ref_position - ref_start - 1;
-                if (ref_position - 1 >= ref_start &&
-                    ref_position - 1 <= ref_end) {
-                    // process insert allele here
-                    string alt;
-                    alt = truth_read_h2.sequence.substr(read_index, cigar.length);
-
-                    for (int i = 0; i < longest_insert_count[ref_position - 1]; i++) {
-                        char base = '#';
-                        if (i < alt.length()) {
-                            base = alt[i];
-                        }
-                        pair<long long, int> position_pair = make_pair(ref_position - 1, i);
-                        insert_labels_h2[position_pair] = base;
-                    }
-                }
-                read_index += cigar.length;
-                break;
-            case CIGAR_OPERATIONS::REF_SKIP:
-            case CIGAR_OPERATIONS::PAD:
-            case CIGAR_OPERATIONS::DEL:
-                reference_index = ref_position - ref_start - 1;
-
-                if (ref_position >= ref_start && ref_position <= ref_end) {
-                    // process delete allele here
-                    for (int i = 0; i < cigar.length; i++) {
-                        if (ref_position + i >= ref_start && ref_position + i <= ref_end) {
-                            // DELETE
-                            char base = '*';
-                            base_labels_h2[ref_position + i] = '*';
+                            if(hp_tag == 1)
+                                base_labels_h1[ref_position] = '*';
+                            else if(hp_tag == 2)
+                                base_labels_h2[ref_position] = '*';
                         }
                     }
                 }
@@ -332,6 +278,11 @@ void SummaryGenerator::debug_print(long long start_pos, long long end_pos) {
         if (longest_insert_count[i] > 0 && ImageOptions::GENERATE_INSERTS) {
             for (int ii = 0; ii < longest_insert_count[i]; ii++)cout << "  *" << "\t";
         }
+    }
+    cout<<endl;
+    for (int i = 0; i <= ref_image.size(); i++) {
+        if(i==0) cout<<"REF:\t";
+        cout << "  " << ref_image[i] << "\t";
     }
     cout << endl;
     for (int i = start_pos; i <= end_pos; i++) {
@@ -423,6 +374,7 @@ void SummaryGenerator::generate_image(long long start_pos, long long end_pos) {
         }
     }
     assert(image.size() == genomic_pos.size());
+    assert(image.size() == ref_image.size());
 }
 
 
@@ -430,8 +382,8 @@ void SummaryGenerator::generate_image(long long start_pos, long long end_pos) {
 void SummaryGenerator::generate_train_summary(vector <type_read> &reads,
                                               long long start_pos,
                                               long long end_pos,
-                                              type_read truth_read_h1,
-                                              type_read truth_read_h2) {
+                                              vector<type_read> &truth_reads_h1,
+                                              vector<type_read> &truth_reads_h2) {
 
 
     for (auto &read:reads) {
@@ -442,7 +394,16 @@ void SummaryGenerator::generate_train_summary(vector <type_read> &reads,
     }
 
     // this populates base_labels and insert_labels dictionaries
-    generate_labels(truth_read_h1, truth_read_h2, start_pos, end_pos + 1);
+    for (auto &truth_read_h1:truth_reads_h1) {
+        // this populates summaries
+        generate_labels(truth_read_h1, start_pos, end_pos + 1, 1);
+    }
+
+
+    for (auto &truth_read_h2:truth_reads_h2) {
+        // this populates summaries
+        generate_labels(truth_read_h2, start_pos, end_pos + 1, 2);
+    }
 
     // after all the dictionaries are populated, we can simply walk through the region and generate a sequence
     for (long long pos = start_pos; pos <= end_pos; pos++) {
@@ -501,6 +462,17 @@ void SummaryGenerator::generate_train_summary(vector <type_read> &reads,
     bad_label_positions.push_back(labels.size());
     assert(labels.size() == genomic_pos.size());
 
+
+    // generate reference sequence
+    for (int i = start_pos; i <= end_pos; i++) {
+        ref_image.push_back(get_reference_feature_index(reference_sequence[i - ref_start]));
+
+        if (longest_insert_count[i] > 0 && ImageOptions::GENERATE_INSERTS) {
+            for (int ii = 0; ii < longest_insert_count[i]; ii++)
+                ref_image.push_back(get_reference_feature_index('*'));
+        }
+    }
+
     generate_image(start_pos, end_pos);
 //     at this point everything should be generated
 //    debug_print(start_pos, end_pos);
@@ -525,6 +497,16 @@ void SummaryGenerator::generate_summary(vector <type_read> &reads,
             for (int ii = 0; ii < longest_insert_count[pos]; ii++) {
                 genomic_pos.push_back(make_pair(pos, ii + 1));
             }
+        }
+    }
+
+    // generate reference sequence
+    for (int i = start_pos; i <= end_pos; i++) {
+        ref_image.push_back(get_reference_feature_index(reference_sequence[i - start_pos]));
+
+        if (longest_insert_count[i] > 0 && ImageOptions::GENERATE_INSERTS) {
+            for (int ii = 0; ii < longest_insert_count[i]; ii++)
+                ref_image.push_back(get_reference_feature_index('*'));
         }
     }
 
