@@ -44,7 +44,7 @@ class AlignmentSummarizer:
                 pos_chunk = pos_chunk + [(-1, -1)] * padding_required
                 ref_chunk = ref_chunk + [0] * padding_required
                 image_chunk = [chunk + [[0] * ImageSizeOptions.IMAGE_CHANNEL_HEIGHT] * padding_required for chunk in image_chunk]
-                coverage_chunk = [chunk + [0] * padding_required for chunk in image_chunk]
+                coverage_chunk = [chunk + [0] * padding_required for chunk in coverage_chunk]
 
             assert (len(image_chunk[0]) == len(coverage_chunk[0]) == len(pos_chunk) == len(ref_chunk) == len(label_chunk[0]) == ImageSizeOptions.SEQ_LENGTH)
 
@@ -433,7 +433,7 @@ class AlignmentSummarizer:
             all_positions.extend(positions)
             all_image_chunk_ids.extend(chunk_ids)
             all_ref_seq.extend(ref_seqs)
-            all_coverage_count.append(coverage)
+            all_coverage_count.extend(coverage)
 
         assert(len(all_images) == len(all_labels) == len(all_image_chunk_ids) == len(all_ref_seq))
 
