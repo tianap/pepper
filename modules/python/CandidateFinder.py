@@ -293,7 +293,7 @@ def mismatch_groups_to_variants(mismatch_group):
     start_ref = ref_dict[(start_pos, start_indx)]
 
     if start_indx > 0 or start_ref == 0:
-        print("GROUP ERROR: ", mismatch_group)
+        # print("GROUP ERROR: ", mismatch_group)
         return None
 
     ref_allele = []
@@ -375,9 +375,9 @@ def small_chunk_stitch(file_name, reference_file_path, contig, small_chunk_keys)
             base_predictions_h1 = np.array(bases_h1, dtype=np.int)
             base_predictions_h2 = np.array(bases_h2, dtype=np.int)
             ref_seq = np.array(ref_seq, dtype=np.int)
-
             delete_anchors_h1, insert_anchors_h1 = get_anchor_positions(base_predictions_h1, ref_seq, indices, positions)
             delete_anchors_h2, insert_anchors_h2 = get_anchor_positions(base_predictions_h2, ref_seq, indices, positions)
+
             all_anchors_h1 = insert_anchors_h1 + delete_anchors_h1
             all_anchors_h2 = insert_anchors_h2 + delete_anchors_h2
             all_h1_anchors.extend(all_anchors_h1)
@@ -412,18 +412,22 @@ def small_chunk_stitch(file_name, reference_file_path, contig, small_chunk_keys)
 
     # now add all the anchor positions
     for pos in all_h1_anchors:
+        if pos not in position_to_ref_base.keys():
+            continue
         ref_base = position_to_ref_base[pos]
         if pos not in all_h1_positions:
             all_mismatches_h1.append((pos, 0, ref_base, ref_base))
             all_h1_positions.append(pos)
 
     for pos in all_h2_anchors:
+        if pos not in position_to_ref_base.keys():
+            continue
         ref_base = position_to_ref_base[pos]
         if pos not in all_h2_positions:
             all_mismatches_h2.append((pos, 0, ref_base, ref_base))
             all_h2_positions.append(pos)
 
-    sys.stderr.write("TIME ELAPSED: " + str(time.time() - start_time) + "\n")
+    # sys.stderr.write("TIME ELAPSED: " + str(time.time() - start_time) + "\n")
     return contig, all_mismatches_h1, all_mismatches_h2
 
 
