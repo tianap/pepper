@@ -461,7 +461,7 @@ def find_candidates(hdf5_file_path,  reference_file_path, contig, sequence_chunk
                         all_positions_h2.add((pos, indx))
                         all_mismatches.append((pos, indx, ref, alt, 2))
             else:
-                sys.stderr.write("ERROR: " + str(fut.exception()) + "\n")
+                sys.stderr.write("ERROR IN THREAD: " + str(fut.exception()) + "\n")
             fut._result = None  # python issue 27144
 
     all_groups = group_adjacent_mismatches(sorted(all_mismatches, key=operator.itemgetter(0, 1, 4)))
