@@ -474,7 +474,12 @@ def find_candidates(hdf5_file_path,  reference_file_path, contig, sequence_chunk
         if not mismatch_group:
             continue
         # print("H1", mismatch_group)
-        _st, _end, ref, alt1, alt2, v_type = mismatch_groups_to_variants(mismatch_group)
+        variant = mismatch_groups_to_variants(mismatch_group)
+
+        if variant is not None:
+            _st, _end, ref, alt1, alt2, v_type = variant
+        else:
+            continue
         # print(_st, _end, ref, alt1, alt2, v_type)
         if len(alt1) >= 1:
             all_candidate_positions.add(_st)
