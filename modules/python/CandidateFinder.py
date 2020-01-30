@@ -275,33 +275,57 @@ def group_adjacent_mismatches(mismatches):
 
 
 def mismatch_groups_to_variants(mismatch_group):
-    if len(mismatch_group) == 0:
-        return []
-    v_type = 'SNP'
-    if len(mismatch_group) > 1:
-        v_type = 'INDEL'
+    ref_dict = defaultdict()
+    allele_dict = defaultdict()
+    all_positions = set()
 
-    mismatch_group = sorted(mismatch_group, key=operator.itemgetter(0, 1))
-    start_pos = mismatch_group[0][0]
-    start_indx = mismatch_group[0][1]
-    end_pos = mismatch_group[-1][0]
-    start_alt = mismatch_group[0][3]
-    start_ref = mismatch_group[0][2]
+    mismatch_group = sorted(mismatch_group, key=operator.itemgetter(0, 1, 4))
+    for pos, indx, ref_base, alt, hp_tag in mismatch_group:
+        all_positions.add((pos, indx))
+        ref_dict[(pos, indx)] = ref_base
+        allele_dict[(pos, indx, hp_tag)] = alt
 
-    if start_indx > 0 or start_alt == 0 or start_ref == 0:
+    all_positions = list(all_positions)
+    all_positions = sorted(all_positions, key=operator.itemgetter(0, 1))
+    start_pos = all_positions[0][0]
+    start_indx = all_positions[0][1]
+    end_pos = all_positions[-1][0]
+    start_ref = ref_dict[(start_pos, start_indx)]
+
+    if start_indx > 0 or start_ref == 0:
         print("GROUP ERROR: ", mismatch_group)
         return None
+
     ref_allele = []
-    alt_allele = []
-    for pos, indx, ref, alt in mismatch_group:
-        ref_allele.append(ref)
-        alt_allele.append(alt)
+    alt_allele_1 = []
+    alt_allele_2 = []
+    for pos, indx in all_positions:
+        ref_base = ref_dict[(pos, indx)]
+        ref_allele.append(ref_base)
+        if (pos, indx, 1) in allele_dict.keys():
+            alt_allele_1.append(allele_dict[(pos, indx, 1)])
+        else:
+            alt_allele_1.append(ref_base)
+
+        if (pos, indx, 2) in allele_dict.keys():
+            alt_allele_2.append(allele_dict[(pos, indx, 2)])
+        else:
+            alt_allele_2.append(ref_base)
 
     ref_seq = ''.join(label_decoder[i] for i in ref_allele)
-    alt_seq = ''.join(label_decoder[i] for i in alt_allele)
-    if len(ref_seq) == 0 or len(alt_seq) == 0:
-        print("ERROR: ", start_pos, end_pos+1, ref_seq, alt_seq, v_type)
-    return start_pos, end_pos+1, ref_seq, alt_seq, v_type
+    alt1_seq = ''.join(label_decoder[i] for i in alt_allele_1)
+    alt2_seq = ''.join(label_decoder[i] for i in alt_allele_2)
+
+    if alt1_seq == ref_seq:
+        alt1_seq = ''
+    if alt2_seq == ref_seq:
+        alt2_seq = ''
+
+    v_type = 'SNP'
+    if len(ref_seq) > 1:
+        v_type = 'INDEL'
+
+    return start_pos, end_pos+1, ref_seq, alt1_seq, alt2_seq, v_type
 
 
 def get_anchor_positions(base_predictions, ref_seq, indices, positions):
@@ -412,8 +436,7 @@ def find_candidates(hdf5_file_path,  reference_file_path, contig, sequence_chunk
 
     sequence_chunk_key_list = sorted(sequence_chunk_key_list, key=lambda element: (element[1], element[2]))
 
-    all_mismatches_h1 = list()
-    all_mismatches_h2 = list()
+    all_mismatches = list()
     all_positions_h1 = set()
     all_positions_h2 = set()
     # generate the dictionary in parallel
@@ -431,37 +454,33 @@ def find_candidates(hdf5_file_path,  reference_file_path, contig, sequence_chunk
                 for pos, indx, ref, alt in mismatches_h1:
                     if (pos, indx) not in all_positions_h1:
                         all_positions_h1.add((pos, indx))
-                        all_mismatches_h1.append((pos, indx, ref, alt))
+                        all_mismatches.append((pos, indx, ref, alt, 1))
 
                 for pos, indx, ref, alt in mismatches_h2:
                     if (pos, indx) not in all_positions_h2:
                         all_positions_h2.add((pos, indx))
-                        all_mismatches_h2.append((pos, indx, ref, alt))
+                        all_mismatches.append((pos, indx, ref, alt, 2))
             else:
                 sys.stderr.write("ERROR: " + str(fut.exception()) + "\n")
             fut._result = None  # python issue 27144
 
-    all_groups_h1 = group_adjacent_mismatches(sorted(all_mismatches_h1, key=operator.itemgetter(0, 1)))
-    all_groups_h2 = group_adjacent_mismatches(sorted(all_mismatches_h2, key=operator.itemgetter(0, 1)))
+    all_groups = group_adjacent_mismatches(sorted(all_mismatches, key=operator.itemgetter(0, 1, 4)))
 
     all_candidate_positions = set()
-    candidate_positional_map_h1 = defaultdict(lambda: list)
-    candidate_positional_map_h2 = defaultdict(lambda: list)
+    candidate_positional_map_h1 = defaultdict()
+    candidate_positional_map_h2 = defaultdict()
 
-    for mismatch_group in all_groups_h1:
+    for mismatch_group in all_groups:
         if not mismatch_group:
             continue
-        variant_h1 = mismatch_groups_to_variants(mismatch_group)
-        if variant_h1 is not None:
-            all_candidate_positions.add(variant_h1[0])
-            candidate_positional_map_h1[variant_h1[0]] = variant_h1
-
-    for mismatch_group in all_groups_h2:
-        if not mismatch_group:
-            continue
-        variant_h2 = mismatch_groups_to_variants(mismatch_group)
-        if variant_h2 is not None:
-            all_candidate_positions.add(variant_h2[0])
-            candidate_positional_map_h2[variant_h2[0]] = variant_h2
+        # print("H1", mismatch_group)
+        _st, _end, ref, alt1, alt2, v_type = mismatch_groups_to_variants(mismatch_group)
+        # print(_st, _end, ref, alt1, alt2, v_type)
+        if len(alt1) >= 1:
+            all_candidate_positions.add(_st)
+            candidate_positional_map_h1[_st] = (_st, _end, ref, alt1, v_type)
+        if len(alt2) >= 1:
+            all_candidate_positions.add(_st)
+            candidate_positional_map_h2[_st] = (_st, _end, ref, alt2, v_type)
 
     return all_candidate_positions, candidate_positional_map_h1, candidate_positional_map_h2
