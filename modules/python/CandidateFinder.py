@@ -289,6 +289,7 @@ def mismatch_groups_to_variants(mismatch_group):
     start_ref = mismatch_group[0][2]
 
     if start_indx > 0 or start_alt == 0 or start_ref == 0:
+        print("GROUP ERROR: ", mismatch_group)
         return None
     ref_allele = []
     alt_allele = []
