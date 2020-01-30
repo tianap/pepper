@@ -301,8 +301,11 @@ def mismatch_groups_to_variants(mismatch_group):
     alt_allele_1 = []
     alt_allele_2 = []
     for pos, indx in all_positions:
-        ref_base = ref_dict[(pos, indx)]
-        ref_allele.append(ref_base)
+        ref_base = 0
+        if indx == 0:
+            ref_base = ref_dict[(pos, indx)]
+            ref_allele.append(ref_base)
+
         if (pos, indx, 1) in allele_dict.keys():
             alt_allele_1.append(allele_dict[(pos, indx, 1)])
         else:
