@@ -2,7 +2,7 @@ import argparse
 import sys
 from modules.python.TextColor import TextColor
 from modules.python.ImageGenerationUI import UserInterfaceSupport
-from modules.python.models.predict_fake import predict
+from modules.python.models.predict import predict
 
 
 def polish_genome(csv_file, model_path, batch_size, threads, num_workers, output_dir, gpu_mode):
