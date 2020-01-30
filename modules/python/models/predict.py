@@ -67,9 +67,6 @@ def predict(test_file, output_filename, model_path, batch_size, threads, num_wor
             prediction_base_counter_h1 = np.zeros((images.size(0), ImageSizeOptions.SEQ_LENGTH, ImageSizeOptions.TOTAL_LABELS))
             prediction_base_counter_h2 = np.zeros((images.size(0), ImageSizeOptions.SEQ_LENGTH, ImageSizeOptions.TOTAL_LABELS))
 
-            prediction_base_probs_h1 = np.zeros((images.size(0), ImageSizeOptions.SEQ_LENGTH, ImageSizeOptions.TOTAL_LABELS))
-            prediction_base_probs_h2 = np.zeros((images.size(0), ImageSizeOptions.SEQ_LENGTH, ImageSizeOptions.TOTAL_LABELS))
-
             for i in range(0, ImageSizeOptions.SEQ_LENGTH, TrainOptions.WINDOW_JUMP):
                 if i + TrainOptions.TRAIN_WINDOW > ImageSizeOptions.SEQ_LENGTH:
                     break
@@ -106,20 +103,12 @@ def predict(test_file, output_filename, model_path, batch_size, threads, num_wor
                 assert(len(base_max_value_h2) == len(predicted_base_label_h2))
 
                 for ii in range(0, len(predicted_base_label_h1)):
-                    for j in range(0, TrainOptions.TRAIN_WINDOW):
-                        for k in range(0, ImageSizeOptions.TOTAL_LABELS):
-                            prediction_base_probs_h1[ii][chunk_start+j][k] += output_preds_h1[ii][j][k]
-
                     chunk_pos = chunk_start
                     for p_base, base in zip(base_max_value_h1[ii], predicted_base_label_h1[ii]):
                         prediction_base_counter_h1[ii][chunk_pos][base] += 1
                         chunk_pos += 1
 
                 for ii in range(0, len(predicted_base_label_h2)):
-                    for j in range(0, TrainOptions.TRAIN_WINDOW):
-                        for k in range(0, ImageSizeOptions.TOTAL_LABELS):
-                            prediction_base_probs_h2[ii][chunk_start+j][k] += output_preds_h2[ii][j][k]
-
                     chunk_pos = chunk_start
                     for p_base, base in zip(base_max_value_h2[ii], predicted_base_label_h2[ii]):
                         prediction_base_counter_h2[ii][chunk_pos][base] += 1
@@ -128,25 +117,10 @@ def predict(test_file, output_filename, model_path, batch_size, threads, num_wor
             predicted_base_labels_h1 = np.argmax(np.array(prediction_base_counter_h1), axis=2)
             predicted_base_labels_h2 = np.argmax(np.array(prediction_base_counter_h2), axis=2)
 
-            # for i in range(images.size(0)):
-            #     for pos, indx, p_h1, p_h2, base_h1, base_h2, base_ref in zip(position[i], index[i], prediction_base_probs_h1[i], prediction_base_probs_h2[i], predicted_base_labels_h1[i], predicted_base_labels_h2[i], ref_seq[i]):
-            #         print(pos.item(), indx.item(), p_h1, p_h2, base_h1, base_h2, base_ref.item())
-            # exit()
-            #
-            # # print()
-            # # print(contig_start, contig_end)
-            # # print(ref_seq)
-            # # for i in range(images.size(0)):
-            # #     print(predicted_base_label_h1[i])
-            # #     print(predicted_base_label_h2[i])
-            # exit()
-
             for i in range(images.size(0)):
                 prediction_data_file.write_prediction(contig[i], contig_start[i], contig_end[i], chunk_id[i],
                                                       position[i], index[i],
                                                       ref_seq[i],
                                                       coverage[i],
-                                                      prediction_base_probs_h1[i],
-                                                      prediction_base_probs_h2[i],
                                                       predicted_base_labels_h1[i],
                                                       predicted_base_labels_h2[i])
