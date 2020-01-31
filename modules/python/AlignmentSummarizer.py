@@ -323,8 +323,8 @@ class AlignmentSummarizer:
                                 sample[j] = read
                     all_reads = sample
 
-                sys.stderr.write(TextColor.GREEN + "INFO: " + log_prefix + " TOTAL " + str(total_reads)
-                                 + " READS FOUND.\n" + TextColor.END)
+                # sys.stderr.write(TextColor.GREEN + "INFO: " + log_prefix + " TOTAL " + str(total_reads)
+                #                  + " READS FOUND.\n" + TextColor.END)
 
                 start_time = time.time()
 
