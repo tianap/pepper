@@ -42,21 +42,41 @@ class VCFWriter:
 
         return sorted([alt1_gt, alt2_gt])
 
-    def get_alleles(self, ref, alt1, alt2):
-        alts = []
-        if ref != alt1:
-            alts.append(alt1)
-        if ref != alt2 and alt1 != alt2:
-            alts.append(alt2)
-        return alts
+    def get_alleles(self, ref_base, alt_predictions):
+        alts1 = set()
+        alts2 = set()
+        for alt1, alt2 in alt_predictions:
+            if alt1 != ref_base:
+                alts1.add(alt1)
+            if alt2 != ref_base:
+                alts2.add(alt2)
 
-    def write_vcf_records(self, chromosome_name, called_variants):
-        for pos in sorted(called_variants.keys()):
-            ref, allele_1, allele_2 = called_variants[pos][0]
-            ref, alt_alleles, gt = self.get_genotype(ref, allele_1, allele_2)
+        return list(alts1), list(alts2)
+
+    def write_vcf_records(self, chromosome_name, called_variants, reference_dict, positions):
+        for pos in sorted(positions):
+            ref_base = reference_dict[pos]
+            alts1, alts2 = self.get_alleles(ref_base, called_variants[pos])
+            if alts1:
+                alt1 = alts1[0]
+            else:
+                alt1 = ref_base
+
+            if alts2:
+                alt2 = alts2[0]
+            else:
+                alt2 = ref_base
+
+            ref, alt_alleles, gt = self.get_genotype(ref_base, alt1, alt2)
 
             if gt == [0, 0]:
                 continue
+            # add extra alleles not used here
+            for i in range(1, len(alts1)):
+                alt_alleles.append(alts1[i])
+            # add extra alleles not used
+            for i in range(1, len(alts2)):
+                alt_alleles.append(alts2[i])
 
             alleles = tuple([ref]) + tuple(alt_alleles)
             # print(str(chrm), st_pos, end_pos, qual, rec_filter, alleles, genotype, gq)

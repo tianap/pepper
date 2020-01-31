@@ -89,16 +89,13 @@ def predict(test_file, output_filename, model_path, batch_size, threads, num_wor
                     inference_layers = inference_layers.cuda()
 
                 # run the softmax and padding layers
-                base_prediction = inference_layers(output_base)
+                base_prediction = (inference_layers(output_base) * 10).type(torch.IntTensor)
 
                 # now simply add the tensor to the global counter
                 prediction_base_tensor = torch.add(prediction_base_tensor, base_prediction)
 
-            # all done now create a SEQ_LENGTH long prediction list
-            prediction_base_tensor = prediction_base_tensor.cpu()
-            base_values, base_labels = torch.max(prediction_base_tensor, 2)
-            predicted_base_labels = base_labels.cpu().numpy()
+            prediction_base_tensor = prediction_base_tensor.cpu().numpy().astype(int)
 
             for i in range(images.size(0)):
                 prediction_data_file.write_prediction(contig[i], contig_start[i], contig_end[i], chunk_id[i],
-                                                      position[i], index[i], predicted_base_labels[i], ref_seq[i])
+                                                      position[i], index[i], prediction_base_tensor[i], ref_seq[i])

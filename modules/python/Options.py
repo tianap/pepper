@@ -22,6 +22,11 @@ class TrainOptions(object):
     HIDDEN_SIZE = 128
 
 
+class CandidateOptions(object):
+    # any value higher or equal candidate prob will be considered as a candidate
+    CANDIDATE_PROB_THRESHOLD = 0.2
+
+
 class AlingerOptions(object):
     # base and map quality
     ALIGNMENT_SAFE_BASES = 20
