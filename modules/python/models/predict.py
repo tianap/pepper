@@ -109,14 +109,14 @@ def predict(test_file, output_filename, model_path, batch_size, threads, num_wor
                 prediction_base_counter_h2 = torch.add(prediction_base_counter_h2, base_prediction_h2)
 
             # all done now create a SEQ_LENGTH long prediction list
-            prediction_base_counter_h1 = prediction_base_counter_h1.cpu()
-            prediction_base_counter_h2 = prediction_base_counter_h2.cpu()
+            # prediction_base_counter_h1 = prediction_base_counter_h1.cpu()
+            # prediction_base_counter_h2 = prediction_base_counter_h2.cpu()
 
             base_values_h1, base_labels_h1 = torch.max(prediction_base_counter_h1, 2)
             base_values_h2, base_labels_h2 = torch.max(prediction_base_counter_h2, 2)
 
-            predicted_base_labels_h1 = base_values_h1.cpu().numpy()
-            predicted_base_labels_h2 = base_values_h2.cpu().numpy()
+            predicted_base_labels_h1 = base_labels_h1.cpu().numpy()
+            predicted_base_labels_h2 = base_labels_h2.cpu().numpy()
 
             for i in range(images.size(0)):
                 prediction_data_file.write_prediction(contig[i], contig_start[i], contig_end[i], chunk_id[i],
