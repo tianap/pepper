@@ -122,11 +122,11 @@ def find_candidates(file_name, contig, small_chunk_keys):
 
                 # get the predictions and see if this site has a candidate
                 base_pred_norm = base_pred / sum(base_pred)
-
+                max_pred_value = max(base_pred)
                 # first see if this position has any candidates
                 has_candidate = False
-                for pred_code, pred_value in enumerate(base_pred_norm):
-                    if pred_value >= CandidateOptions.CANDIDATE_PROB_THRESHOLD:
+                for pred_code, (pred_value_norm, pred_value) in enumerate(zip(base_pred_norm, base_pred)):
+                    if pred_value_norm >= CandidateOptions.CANDIDATE_PROB_THRESHOLD or pred_value >= max_pred_value:
                         pred_bases = decode_bases(pred_code)
                         for pred_base in pred_bases:
                             if pred_base != reference_base:
@@ -135,8 +135,8 @@ def find_candidates(file_name, contig, small_chunk_keys):
 
                 # if it has candidates, then update the dictionaries
                 if has_candidate:
-                    for pred_code, pred_value in enumerate(base_pred_norm):
-                        if pred_value >= CandidateOptions.CANDIDATE_PROB_THRESHOLD:
+                    for pred_code, (pred_value_norm, pred_value) in enumerate(zip(base_pred_norm, base_pred)):
+                        if pred_value_norm >= CandidateOptions.CANDIDATE_PROB_THRESHOLD or pred_value >= max_pred_value:
                             pred_bases = decode_bases(pred_code)
                             predicted_bases = pred_bases
 

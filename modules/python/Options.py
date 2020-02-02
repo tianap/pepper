@@ -9,7 +9,7 @@ class ImageSizeOptions(object):
     MIN_SEQUENCE_LENGTH = 1000
     MIN_IMAGE_OVERLAP = 100
     decoded_labels = ['**', 'AA', 'AC', 'AT', 'AG', 'A*', 'CC', 'CT', 'CG', 'C*', 'TT', 'TG', 'T*', 'GG', 'G*']
-    class_weights =   [0.1,  0.1,  1.0,  1.0,  1.0,  1.0,  0.1,  1.0,  1.0,  1.0,  0.1,  1.0,  1.0,  0.1,  1.0]
+    class_weights =  [0.1,  0.1,  1.0,  1.0,  1.0,  1.0,  0.1,  1.0,  1.0,  1.0,  0.1,  1.0,  1.0,  0.1,  1.0]
 
 
 class TrainOptions(object):
@@ -24,7 +24,7 @@ class TrainOptions(object):
 
 class CandidateOptions(object):
     # any value higher or equal candidate prob will be considered as a candidate
-    CANDIDATE_PROB_THRESHOLD = 0.1
+    CANDIDATE_PROB_THRESHOLD = 0.01
 
 
 class AlingerOptions(object):
