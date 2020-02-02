@@ -54,18 +54,19 @@ def predict(test_file, output_filename, model_path, batch_size, threads, num_wor
         for contig, contig_start, contig_end, chunk_id, images, position, index, ref_seq, coverage, labels in tqdm(test_loader, ncols=50):
             sys.stderr.flush()
             images = images.type(torch.FloatTensor)
-            if gpu_mode:
-                images = images.cuda()
 
             hidden_h1 = torch.zeros(images.size(0), 2 * TrainOptions.GRU_LAYERS, TrainOptions.HIDDEN_SIZE)
             hidden_h2 = torch.zeros(images.size(0), 2 * TrainOptions.GRU_LAYERS, TrainOptions.HIDDEN_SIZE)
 
+            prediction_base_counter_h1 = torch.zeros((images.size(0), ImageSizeOptions.SEQ_LENGTH, ImageSizeOptions.TOTAL_LABELS))
+            prediction_base_counter_h2 = torch.zeros((images.size(0), ImageSizeOptions.SEQ_LENGTH, ImageSizeOptions.TOTAL_LABELS))
+
             if gpu_mode:
+                images = images.cuda()
                 hidden_h1 = hidden_h1.cuda()
                 hidden_h2 = hidden_h2.cuda()
-
-            prediction_base_counter_h1 = np.zeros((images.size(0), ImageSizeOptions.SEQ_LENGTH, ImageSizeOptions.TOTAL_LABELS))
-            prediction_base_counter_h2 = np.zeros((images.size(0), ImageSizeOptions.SEQ_LENGTH, ImageSizeOptions.TOTAL_LABELS))
+                prediction_base_counter_h1 = prediction_base_counter_h1.cuda()
+                prediction_base_counter_h2 = prediction_base_counter_h2.cuda()
 
             for i in range(0, ImageSizeOptions.SEQ_LENGTH, TrainOptions.WINDOW_JUMP):
                 if i + TrainOptions.TRAIN_WINDOW > ImageSizeOptions.SEQ_LENGTH:
@@ -81,41 +82,41 @@ def predict(test_file, output_filename, model_path, batch_size, threads, num_wor
                 out_h1, hidden_h1 = transducer_model(image_chunk_h1, hidden_h1)
                 out_h2, hidden_h2 = transducer_model(image_chunk_h2, hidden_h2)
 
-                # do softmax and get prediction
-                m = nn.Softmax(dim=2)
-                soft_probs_h1 = m(out_h1)
-                output_preds_h1 = soft_probs_h1.cpu()
-                base_max_value_h1, predicted_base_label_h1 = torch.max(output_preds_h1, dim=2)
+                # now calculate how much padding is on the top and bottom of this chunk so we can do a simple
+                # add operation
+                top_zeros = chunk_start
+                bottom_zeros = ImageSizeOptions.SEQ_LENGTH - chunk_end
 
                 # do softmax and get prediction
-                m = nn.Softmax(dim=2)
-                soft_probs_h2 = m(out_h2)
-                output_preds_h2 = soft_probs_h2.cpu()
-                base_max_value_h2, predicted_base_label_h2 = torch.max(output_preds_h2, dim=2)
+                # we run a softmax a padding to make the output tensor compatible for adding
+                inference_layers = nn.Sequential(
+                    nn.Softmax(dim=2),
+                    nn.ZeroPad2d((0, 0, top_zeros, bottom_zeros))
+                )
+                if gpu_mode:
+                    inference_layers = inference_layers.cuda()
 
-                # convert everything to list
-                base_max_value_h1 = base_max_value_h1.numpy().tolist()
-                base_max_value_h2 = base_max_value_h2.numpy().tolist()
-                predicted_base_label_h1 = predicted_base_label_h1.numpy().tolist()
-                predicted_base_label_h2 = predicted_base_label_h2.numpy().tolist()
+                # run the softmax and padding layers
+                if gpu_mode:
+                    base_prediction_h1 = (inference_layers(out_h1) * 10).type(torch.IntTensor).cuda()
+                    base_prediction_h2 = (inference_layers(out_h2) * 10).type(torch.IntTensor).cuda()
+                else:
+                    base_prediction_h1 = (inference_layers(out_h1) * 10).type(torch.IntTensor)
+                    base_prediction_h2 = (inference_layers(out_h2) * 10).type(torch.IntTensor)
 
-                assert(len(base_max_value_h1) == len(predicted_base_label_h1))
-                assert(len(base_max_value_h2) == len(predicted_base_label_h2))
+                # now simply add the tensor to the global counter
+                prediction_base_counter_h1 = torch.add(prediction_base_counter_h1, base_prediction_h1)
+                prediction_base_counter_h2 = torch.add(prediction_base_counter_h2, base_prediction_h2)
 
-                for ii in range(0, len(predicted_base_label_h1)):
-                    chunk_pos = chunk_start
-                    for p_base, base in zip(base_max_value_h1[ii], predicted_base_label_h1[ii]):
-                        prediction_base_counter_h1[ii][chunk_pos][base] += 1
-                        chunk_pos += 1
+            # all done now create a SEQ_LENGTH long prediction list
+            prediction_base_counter_h1 = prediction_base_counter_h1.cpu()
+            prediction_base_counter_h2 = prediction_base_counter_h2.cpu()
 
-                for ii in range(0, len(predicted_base_label_h2)):
-                    chunk_pos = chunk_start
-                    for p_base, base in zip(base_max_value_h2[ii], predicted_base_label_h2[ii]):
-                        prediction_base_counter_h2[ii][chunk_pos][base] += 1
-                        chunk_pos += 1
+            base_values_h1, base_labels_h1 = torch.max(prediction_base_counter_h1, 2)
+            base_values_h2, base_labels_h2 = torch.max(prediction_base_counter_h2, 2)
 
-            predicted_base_labels_h1 = np.argmax(np.array(prediction_base_counter_h1), axis=2)
-            predicted_base_labels_h2 = np.argmax(np.array(prediction_base_counter_h2), axis=2)
+            predicted_base_labels_h1 = base_values_h1.cpu().numpy()
+            predicted_base_labels_h2 = base_values_h2.cpu().numpy()
 
             for i in range(images.size(0)):
                 prediction_data_file.write_prediction(contig[i], contig_start[i], contig_end[i], chunk_id[i],
