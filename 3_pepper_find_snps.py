@@ -6,7 +6,7 @@ from modules.python.StitchV2 import create_consensus_sequence
 from modules.python.VcfWriter import VCFWriter
 
 
-def perform_stitch(hdf_file_path, reference_path, output_path, threads, sample_name):
+def perform_stitch(hdf_file_path, reference_path, output_path, threads, sample_name, p_threshold):
     with h5py.File(hdf_file_path, 'r') as hdf5_file:
         contigs = list(hdf5_file['predictions'].keys())
 
@@ -18,7 +18,11 @@ def perform_stitch(hdf_file_path, reference_path, output_path, threads, sample_n
         with h5py.File(hdf_file_path, 'r') as hdf5_file:
             chunk_keys = sorted(hdf5_file['predictions'][contig].keys())
 
-        all_candidates, reference_dict, positions = create_consensus_sequence(hdf_file_path, contig, chunk_keys, threads)
+        all_candidates, reference_dict, positions = create_consensus_sequence(hdf_file_path,
+                                                                              contig,
+                                                                              chunk_keys,
+                                                                              threads,
+                                                                              p_threshold)
         sys.stderr.write(TextColor.BLUE + "INFO: FINISHED PROCESSING " + contig + ", TOTAL CANDIDATES FOUND: "
                          + str(len(all_candidates)) + ".\n" + TextColor.END)
         vcf_file.write_vcf_records(contig, all_candidates, reference_dict, positions)
@@ -62,6 +66,14 @@ if __name__ == '__main__':
         help="Path to output directory."
     )
     parser.add_argument(
+        "-p",
+        "--probability_threshold",
+        type=float,
+        required=False,
+        default=0.3,
+        help="Threshold value for reporting SNPs."
+    )
+    parser.add_argument(
         "-t",
         "--threads",
         type=int,
@@ -70,4 +82,9 @@ if __name__ == '__main__':
     )
 
     FLAGS, unparsed = parser.parse_known_args()
-    perform_stitch(FLAGS.input_hdf, FLAGS.input_reference, FLAGS.output_dir, FLAGS.threads, FLAGS.sample_name)
+    perform_stitch(FLAGS.input_hdf,
+                   FLAGS.input_reference,
+                   FLAGS.output_dir,
+                   FLAGS.threads,
+                   FLAGS.sample_name,
+                   FLAGS.probability_threshold)

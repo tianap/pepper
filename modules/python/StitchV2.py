@@ -90,7 +90,7 @@ def chunks_alignment_sequence(alignment_sequence_pairs, min_length):
     return chunks
 
 
-def find_candidates(file_name, contig, small_chunk_keys):
+def find_candidates(file_name, contig, small_chunk_keys, p_threshold):
     # for chunk_key in small_chunk_keys:
     candidate_variants = defaultdict(list)
     reference_dict = defaultdict()
@@ -102,7 +102,6 @@ def find_candidates(file_name, contig, small_chunk_keys):
             smaller_chunks = set(hdf5_file['predictions'][contig][chunk_name].keys()) - {'contig_start', 'contig_end'}
 
         smaller_chunks = sorted(smaller_chunks)
-        base_prediction_dict = defaultdict()
 
         for chunk in smaller_chunks:
             with h5py.File(file_name, 'r') as hdf5_file:
@@ -126,7 +125,7 @@ def find_candidates(file_name, contig, small_chunk_keys):
                 # first see if this position has any candidates
                 has_candidate = False
                 for pred_code, (pred_value_norm, pred_value) in enumerate(zip(base_pred_norm, base_pred)):
-                    if pred_value_norm >= CandidateOptions.CANDIDATE_PROB_THRESHOLD or pred_value >= max_pred_value:
+                    if pred_value_norm >= p_threshold or pred_value >= max_pred_value:
                         pred_bases = decode_bases(pred_code)
                         for pred_base in pred_bases:
                             if pred_base != reference_base:
@@ -136,7 +135,7 @@ def find_candidates(file_name, contig, small_chunk_keys):
                 # if it has candidates, then update the dictionaries
                 if has_candidate:
                     for pred_code, (pred_value_norm, pred_value) in enumerate(zip(base_pred_norm, base_pred)):
-                        if pred_value_norm >= CandidateOptions.CANDIDATE_PROB_THRESHOLD or pred_value >= max_pred_value:
+                        if pred_value_norm >= p_threshold or pred_value >= max_pred_value:
                             pred_bases = decode_bases(pred_code)
                             predicted_bases = pred_bases
 
@@ -148,7 +147,7 @@ def find_candidates(file_name, contig, small_chunk_keys):
     return contig, reference_dict, candidate_variants
 
 
-def create_consensus_sequence(hdf5_file_path, contig, sequence_chunk_keys, threads):
+def create_consensus_sequence(hdf5_file_path, contig, sequence_chunk_keys, threads, p_threshold):
     sequence_chunk_keys = sorted(sequence_chunk_keys)
     sequence_chunk_key_list = list()
     for sequence_chunk_key in sequence_chunk_keys:
@@ -165,7 +164,7 @@ def create_consensus_sequence(hdf5_file_path, contig, sequence_chunk_keys, threa
         file_chunks = chunks(sequence_chunk_key_list, max(MIN_SEQUENCE_REQUIRED_FOR_MULTITHREADING,
                                                           int(len(sequence_chunk_key_list) / threads) + 1))
 
-        futures = [executor.submit(find_candidates, hdf5_file_path, contig, file_chunk)
+        futures = [executor.submit(find_candidates, hdf5_file_path, contig, file_chunk, p_threshold)
                    for file_chunk in file_chunks]
         for fut in concurrent.futures.as_completed(futures):
             if fut.exception() is None:
