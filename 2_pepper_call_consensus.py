@@ -5,6 +5,7 @@ from modules.python.TextColor import TextColor
 from modules.python.ImageGenerationUI import UserInterfaceSupport
 from modules.python.models.predict import predict
 from modules.python.models.predict_distributed_cpu import predict_distributed_cpu
+from modules.python.models.predict_distributed_gpu import predict_distributed_gpu
 from os.path import isfile, join
 from os import listdir
 
@@ -66,7 +67,7 @@ def polish_genome_distributed_cpu(image_dir, model_path, batch_size, threads, nu
 
     threads = min(threads, len(file_chunks))
     sys.stderr.write(TextColor.GREEN + "INFO: TOTAL THREADS: " + str(threads) + "\n" + TextColor.END)
-    predict_distributed_cpu(image_dir, file_chunks, output_dir, model_path, batch_size, threads, num_workers)
+    predict_distributed_gpu(image_dir, file_chunks, output_dir, model_path, batch_size, threads, num_workers)
     sys.stderr.write(TextColor.GREEN + "INFO: " + TextColor.END + "PREDICTION GENERATED SUCCESSFULLY.\n")
 
 

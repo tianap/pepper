@@ -16,7 +16,7 @@ from modules.python.DataStorePredict import DataStore
 def predict(input_filepath, file_chunks, output_filepath, transducer_model, batch_size, num_workers, device_id):
     transducer_model = transducer_model.eval()
     # create output file
-    output_filename = output_filepath + "pepper_prediction_" + str(thread_id) + ".hdf"
+    output_filename = output_filepath + "pepper_prediction_" + str(device_id) + ".hdf"
     prediction_data_file = DataStore(output_filename, mode='w')
 
     # data loader
