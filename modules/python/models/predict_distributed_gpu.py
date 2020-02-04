@@ -93,6 +93,12 @@ def predict(input_filepath, file_chunks, output_filepath, model_path, batch_size
                 prediction_data_file.write_prediction(contig[i], contig_start[i], contig_end[i], chunk_id[i],
                                                       position[i], index[i], prediction_base_tensor[i], ref_seq[i])
             progress_bar.update(1)
+
+            del prediction_base_tensor
+            del images
+            del hidden
+    del transducer_model
+    torch.cuda.empty_cache()
     progress_bar.close()
 
 
