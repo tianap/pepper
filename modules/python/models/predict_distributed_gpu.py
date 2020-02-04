@@ -42,6 +42,7 @@ def predict(input_filepath, file_chunks, output_filepath, model_path, batch_size
         total=len(data_loader),
         ncols=100,
         position=device_id,
+        leave=True,
         desc="GPU #" + str(device_id),
     )
 
@@ -97,13 +98,6 @@ def predict(input_filepath, file_chunks, output_filepath, model_path, batch_size
                                                       position[i], index[i], prediction_base_tensor[i], ref_seq[i])
             progress_bar.update(1)
 
-            del prediction_base_tensor
-            del images
-            del hidden
-            torch.cuda.empty_cache()
-
-    del transducer_model
-    torch.cuda.empty_cache()
     progress_bar.close()
 
 
@@ -119,6 +113,9 @@ def setup(rank, total_threads, args, all_input_files):
     dist.init_process_group("gloo", rank=rank, world_size=total_threads)
 
     filepath, output_filepath, model_path, batch_size, num_workers = args
+
+    # issue with semaphore lock: https://github.com/pytorch/pytorch/issues/2517
+    mp.set_start_method('spawn')
 
     # Explicitly setting seed to make sure that models created in two processes
     # start from same random weights and biases.
