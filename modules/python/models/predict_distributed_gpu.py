@@ -75,10 +75,10 @@ def predict(input_filepath, file_chunks, output_filepath, transducer_model, batc
                 inference_layers = inference_layers.to(device_id)
 
                 # run the softmax and padding layers
-                base_prediction = (inference_layers(output_base) * 10).type(torch.IntTensor)
+                base_prediction = (inference_layers(output_base) * 10).type(torch.IntTensor).to(device_id)
 
                 # now simply add the tensor to the global counter
-                prediction_base_tensor = torch.add(prediction_base_tensor, base_prediction).to(device_id)
+                prediction_base_tensor = torch.add(prediction_base_tensor, base_prediction)
 
             prediction_base_tensor = prediction_base_tensor.cpu().numpy().astype(int)
 
