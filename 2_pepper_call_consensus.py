@@ -59,11 +59,10 @@ def polish_genome_distributed_cpu(image_dir, model_path, batch_size, threads, nu
 
     # chunk the inputs
     input_files = get_file_paths_from_directory(image_dir)
-    chunk_length = int(len(input_files) / threads) + 1
-    file_chunks = []
-
+    chunk_length = int(len(input_files) / threads)
+    file_chunks = [[] for i in range(threads)]
     for i in range(0, len(input_files), chunk_length):
-        file_chunks.append(input_files[i:i + chunk_length])
+        file_chunks[i % threads].append(input_files[i])
 
     threads = min(threads, len(file_chunks))
     sys.stderr.write(TextColor.GREEN + "INFO: TOTAL THREADS: " + str(threads) + "\n" + TextColor.END)

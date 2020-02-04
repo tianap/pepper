@@ -13,7 +13,14 @@ from modules.python.Options import ImageSizeOptions, TrainOptions
 from modules.python.DataStorePredict import DataStore
 
 
-def predict(input_filepath, file_chunks, output_filepath, transducer_model, batch_size, num_workers, device_id):
+def predict(input_filepath, file_chunks, output_filepath, model_path, batch_size, num_workers, device_id):
+    transducer_model, hidden_size, gru_layers, prev_ite = \
+        ModelHandler.load_simple_model_for_training(model_path,
+                                                    input_channels=ImageSizeOptions.IMAGE_CHANNELS,
+                                                    image_features=ImageSizeOptions.IMAGE_HEIGHT,
+                                                    seq_len=ImageSizeOptions.SEQ_LENGTH,
+                                                    num_classes=ImageSizeOptions.TOTAL_LABELS)
+    transducer_model.eval()
     transducer_model = transducer_model.eval()
     # create output file
     output_filename = output_filepath + "pepper_prediction_" + str(device_id) + ".hdf"
@@ -100,12 +107,12 @@ def setup(rank, total_threads, args, all_input_files):
     # initialize the process group
     dist.init_process_group("gloo", rank=rank, world_size=total_threads)
 
-    filepath, output_filepath, transducer_model, batch_size, num_workers = args
+    filepath, output_filepath, model_path, batch_size, num_workers = args
 
     # Explicitly setting seed to make sure that models created in two processes
     # start from same random weights and biases.
     torch.manual_seed(42)
-    predict(filepath, all_input_files[rank],  output_filepath, transducer_model, batch_size, num_workers, rank)
+    predict(filepath, all_input_files[rank],  output_filepath, model_path, batch_size, num_workers, rank)
     cleanup()
 
 
@@ -121,15 +128,7 @@ def predict_distributed_gpu(filepath, file_chunks, output_filepath, model_path, 
     :param num_workers: Number of workers to be used by the dataloader
     :return: Prediction dictionary
     """
-    transducer_model, hidden_size, gru_layers, prev_ite = \
-        ModelHandler.load_simple_model_for_training(model_path,
-                                                    input_channels=ImageSizeOptions.IMAGE_CHANNELS,
-                                                    image_features=ImageSizeOptions.IMAGE_HEIGHT,
-                                                    seq_len=ImageSizeOptions.SEQ_LENGTH,
-                                                    num_classes=ImageSizeOptions.TOTAL_LABELS)
-    transducer_model.eval()
-
-    args = (filepath, output_filepath, transducer_model, batch_size, num_workers)
+    args = (filepath, output_filepath, model_path, batch_size, num_workers)
     mp.spawn(setup,
              args=(threads, args, file_chunks),
              nprocs=threads,
