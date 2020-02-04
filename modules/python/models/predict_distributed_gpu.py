@@ -87,6 +87,9 @@ def predict(input_filepath, file_chunks, output_filepath, model_path, batch_size
                 # now simply add the tensor to the global counter
                 prediction_base_tensor = torch.add(prediction_base_tensor, base_prediction)
 
+                del inference_layers
+                torch.cuda.empty_cache()
+
             prediction_base_tensor = prediction_base_tensor.cpu().numpy().astype(int)
 
             for i in range(images.size(0)):
@@ -97,6 +100,8 @@ def predict(input_filepath, file_chunks, output_filepath, model_path, batch_size
             del prediction_base_tensor
             del images
             del hidden
+            torch.cuda.empty_cache()
+
     del transducer_model
     torch.cuda.empty_cache()
     progress_bar.close()
