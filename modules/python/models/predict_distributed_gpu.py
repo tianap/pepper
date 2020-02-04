@@ -11,6 +11,7 @@ from tqdm import tqdm
 from modules.python.models.ModelHander import ModelHandler
 from modules.python.Options import ImageSizeOptions, TrainOptions
 from modules.python.DataStorePredict import DataStore
+os.environ['PYTHONWARNINGS'] = 'ignore:semaphore_tracker:UserWarning'
 
 
 def predict(input_filepath, file_chunks, output_filepath, model_path, batch_size, num_workers, device_id):
