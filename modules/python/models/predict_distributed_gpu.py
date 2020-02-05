@@ -38,12 +38,12 @@ def predict(input_filepath, file_chunks, output_filepath, model_path, batch_size
     transducer_model.to(device_id)
     transducer_model.eval()
     transducer_model = DistributedDataParallel(transducer_model, device_ids=[device_id])
-
+    tqdm.set_lock(device_id)
     progress_bar = tqdm(
         total=len(data_loader),
         ncols=100,
-        leave=False,
-        position=total_devices,
+        leave=True,
+        position=device_id,
         desc="GPU #" + str(device_id),
     )
 
@@ -97,9 +97,8 @@ def predict(input_filepath, file_chunks, output_filepath, model_path, batch_size
             for i in range(images.size(0)):
                 prediction_data_file.write_prediction(contig[i], contig_start[i], contig_end[i], chunk_id[i],
                                                       position[i], index[i], prediction_base_tensor[i], ref_seq[i])
-            tqdm.get_lock()
             progress_bar.update(1)
-    tqdm.get_lock()
+
     progress_bar.close()
 
 
