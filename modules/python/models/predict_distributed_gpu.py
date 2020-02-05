@@ -100,6 +100,8 @@ def predict(input_filepath, file_chunks, output_filepath, model_path, batch_size
             progress_bar.update(1)
 
     progress_bar.close()
+    sys.stderr.write("\n")
+    sys.stderr.flush()
 
 
 def cleanup():
