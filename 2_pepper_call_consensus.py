@@ -66,6 +66,7 @@ def polish_genome_distributed_cpu(image_dir, model_path, batch_size, threads, nu
     threads = min(threads, len(file_chunks))
     sys.stderr.write(TextColor.GREEN + "INFO: TOTAL THREADS: " + str(threads) + "\n" + TextColor.END)
     predict_distributed_cpu(image_dir, file_chunks, output_dir, model_path, batch_size, threads, num_workers)
+    sys.stderr.flush()
     sys.stderr.write(TextColor.GREEN + "INFO: " + TextColor.END + "PREDICTION GENERATED SUCCESSFULLY.\n")
 
 

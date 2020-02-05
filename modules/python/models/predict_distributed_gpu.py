@@ -99,6 +99,7 @@ def predict(input_filepath, file_chunks, output_filepath, model_path, batch_size
                                                       position[i], index[i], prediction_base_tensor[i], ref_seq[i])
             progress_bar.update(1)
 
+    progress_bar.clear()
     progress_bar.close()
 
 
