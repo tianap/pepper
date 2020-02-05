@@ -149,7 +149,7 @@ def find_candidates(contig, small_chunk_keys, p_threshold):
 def create_consensus_sequence(contig, sequence_chunk_keys, threads, p_threshold):
     all_candidates = defaultdict(list)
     global_reference_dict = defaultdict()
-    positions_with_candidates = list()
+    positions_with_candidates = set()
 
     # generate the dictionary in parallel
     with concurrent.futures.ProcessPoolExecutor(max_workers=threads) as executor:
@@ -164,10 +164,11 @@ def create_consensus_sequence(contig, sequence_chunk_keys, threads, p_threshold)
                 for pos, alt_alleles in candidate_variants.items():
                     if alt_alleles:
                         global_reference_dict[pos] = reference_dict[pos]
-                        positions_with_candidates.append(pos)
+                        positions_with_candidates.add(pos)
                         all_candidates[pos].extend(alt_alleles)
             else:
                 sys.stderr.write("ERROR: " + str(fut.exception()) + "\n")
             fut._result = None  # python issue 27144
+    positions_with_candidates = list(positions_with_candidates)
 
     return all_candidates, global_reference_dict, positions_with_candidates
