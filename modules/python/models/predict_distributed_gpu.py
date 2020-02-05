@@ -14,7 +14,7 @@ from modules.python.DataStorePredict import DataStore
 os.environ['PYTHONWARNINGS'] = 'ignore:semaphore_tracker:UserWarning'
 
 
-def predict(input_filepath, file_chunks, output_filepath, model_path, batch_size, num_workers, device_id):
+def predict(input_filepath, file_chunks, output_filepath, model_path, batch_size, num_workers, progress_bar, device_id):
     transducer_model, hidden_size, gru_layers, prev_ite = \
         ModelHandler.load_simple_model_for_training(model_path,
                                                     input_channels=ImageSizeOptions.IMAGE_CHANNELS,
@@ -39,13 +39,7 @@ def predict(input_filepath, file_chunks, output_filepath, model_path, batch_size
     transducer_model.eval()
     transducer_model = DistributedDataParallel(transducer_model, device_ids=[device_id])
 
-    progress_bar = tqdm(
-        total=len(data_loader),
-        ncols=100,
-        position=device_id,
-        leave=True,
-        desc="GPU #" + str(device_id),
-    )
+
 
     with torch.no_grad():
         for contig, contig_start, contig_end, chunk_id, images, position, index, ref_seq in data_loader:
@@ -98,8 +92,6 @@ def predict(input_filepath, file_chunks, output_filepath, model_path, batch_size
                                                       position[i], index[i], prediction_base_tensor[i], ref_seq[i])
             progress_bar.update(1)
 
-    progress_bar.close()
-
 
 def cleanup():
     dist.destroy_process_group()
@@ -112,7 +104,7 @@ def setup(rank, total_threads, args, all_input_files):
     # initialize the process group
     dist.init_process_group("gloo", rank=rank, world_size=total_threads)
 
-    filepath, output_filepath, model_path, batch_size, num_workers = args
+    filepath, output_filepath, model_path, batch_size, num_workers, p_bars = args
 
     # issue with semaphore lock: https://github.com/pytorch/pytorch/issues/2517
     # mp.set_start_method('spawn')
@@ -120,7 +112,7 @@ def setup(rank, total_threads, args, all_input_files):
     # Explicitly setting seed to make sure that models created in two processes
     # start from same random weights and biases. https://github.com/pytorch/pytorch/issues/2517
     # torch.manual_seed(42)
-    predict(filepath, all_input_files[rank],  output_filepath, model_path, batch_size, num_workers, rank)
+    predict(filepath, all_input_files[rank],  output_filepath, model_path, batch_size, num_workers, p_bars[rank], rank)
     cleanup()
 
 
@@ -136,8 +128,20 @@ def predict_distributed_gpu(filepath, file_chunks, output_filepath, model_path, 
     :param num_workers: Number of workers to be used by the dataloader
     :return: Prediction dictionary
     """
-    args = (filepath, output_filepath, model_path, batch_size, num_workers)
+    p_bars = []
+    for i in range(0, threads):
+        progress_bar = tqdm(
+            ncols=100,
+            position=i,
+            leave=True,
+            desc="GPU #" + str(i),
+        )
+        p_bars.append(progress_bar)
+
+    args = (filepath, output_filepath, model_path, batch_size, num_workers, p_bars)
     mp.spawn(setup,
              args=(threads, args, file_chunks),
              nprocs=threads,
              join=True)
+    for p_bar in p_bars:
+        p_bar.close()
