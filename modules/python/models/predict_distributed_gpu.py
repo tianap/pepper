@@ -42,7 +42,7 @@ def predict(input_filepath, file_chunks, output_filepath, model_path, batch_size
     progress_bar = tqdm(
         total=len(data_loader),
         ncols=100,
-        leave=True,
+        leave=False,
         position=device_id,
         desc="GPU #" + str(device_id),
     )
