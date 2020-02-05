@@ -6,8 +6,8 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel
-from modules.python.TextColor import TextColor
 from modules.python.models.dataloader_predict import SequenceDataset
+from tqdm import tqdm
 from modules.python.models.ModelHander import ModelHandler
 from modules.python.Options import ImageSizeOptions, TrainOptions
 from modules.python.DataStorePredict import DataStore
@@ -39,13 +39,16 @@ def predict(input_filepath, file_chunks, output_filepath, model_path, batch_size
     transducer_model.eval()
     transducer_model = DistributedDataParallel(transducer_model, device_ids=[device_id])
 
-    count = 0
+    progress_bar = tqdm(
+        total=len(data_loader),
+        ncols=100,
+        position=device_id,
+        leave=True,
+        desc="GPU #" + str(device_id),
+    )
+
     with torch.no_grad():
         for contig, contig_start, contig_end, chunk_id, images, position, index, ref_seq in data_loader:
-            if count % 10 == 0 and count > 0:
-                sys.stderr.write(TextColor.GREEN + "\nINFO: FINISHED PROCESSING: " + str(count) +
-                                 " FILES ON DEVICE: " + str(device_id) + TextColor.END)
-
             images = images.type(torch.FloatTensor)
             hidden = torch.zeros(images.size(0), 2 * TrainOptions.GRU_LAYERS, TrainOptions.HIDDEN_SIZE)
 
@@ -93,7 +96,9 @@ def predict(input_filepath, file_chunks, output_filepath, model_path, batch_size
             for i in range(images.size(0)):
                 prediction_data_file.write_prediction(contig[i], contig_start[i], contig_end[i], chunk_id[i],
                                                       position[i], index[i], prediction_base_tensor[i], ref_seq[i])
-            count += 1
+            progress_bar.update(1)
+
+    progress_bar.close()
 
 
 def cleanup():
