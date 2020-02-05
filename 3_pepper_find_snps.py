@@ -4,23 +4,45 @@ import sys
 from modules.python.TextColor import TextColor
 from modules.python.StitchV2 import create_consensus_sequence
 from modules.python.VcfWriter import VCFWriter
+from os.path import isfile, join
+from os import listdir
+
+
+def get_file_paths_from_directory(directory_path):
+    """
+    Returns all paths of files given a directory path
+    :param directory_path: Path to the directory
+    :return: A list of paths of files
+    """
+    file_paths = [join(directory_path, file) for file in listdir(directory_path) if isfile(join(directory_path, file))
+                  and file[-3:] == 'hdf']
+    return file_paths
 
 
 def perform_stitch(hdf_file_path, reference_path, output_path, threads, sample_name, p_threshold):
-    with h5py.File(hdf_file_path, 'r') as hdf5_file:
-        contigs = list(hdf5_file['predictions'].keys())
+    all_prediction_files = get_file_paths_from_directory(hdf_file_path)
 
-    vcf_file = VCFWriter(reference_path, sample_name, output_path, contigs)
+    all_contigs = set()
+    for prediction_file in all_prediction_files:
+        with h5py.File(prediction_file, 'r') as hdf5_file:
+            contigs = list(hdf5_file['predictions'].keys())
+            all_contigs.update(contigs)
+    all_contigs = list(all_contigs)
 
-    for contig in contigs:
+    vcf_file = VCFWriter(reference_path, sample_name, output_path, all_contigs)
+
+    for contig in all_contigs:
         sys.stderr.write(TextColor.YELLOW + "INFO: PROCESSING CONTIG: " + contig + "\n" + TextColor.END)
 
-        with h5py.File(hdf_file_path, 'r') as hdf5_file:
-            chunk_keys = sorted(hdf5_file['predictions'][contig].keys())
+        all_chunk_keys = list()
+        for prediction_file in all_prediction_files:
+            with h5py.File(prediction_file, 'r') as hdf5_file:
+                chunk_keys = sorted(hdf5_file['predictions'][contig].keys())
+                for chunk_key in chunk_keys:
+                    all_chunk_keys.append((prediction_file, chunk_key))
 
-        all_candidates, reference_dict, positions = create_consensus_sequence(hdf_file_path,
-                                                                              contig,
-                                                                              chunk_keys,
+        all_candidates, reference_dict, positions = create_consensus_sequence(contig,
+                                                                              all_chunk_keys,
                                                                               threads,
                                                                               p_threshold)
         sys.stderr.write(TextColor.BLUE + "INFO: FINISHED PROCESSING " + contig + ", TOTAL CANDIDATES FOUND: "

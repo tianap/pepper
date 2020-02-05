@@ -90,13 +90,12 @@ def chunks_alignment_sequence(alignment_sequence_pairs, min_length):
     return chunks
 
 
-def find_candidates(file_name, contig, small_chunk_keys, p_threshold):
+def find_candidates(contig, small_chunk_keys, p_threshold):
     # for chunk_key in small_chunk_keys:
     candidate_variants = defaultdict(list)
     reference_dict = defaultdict()
 
-    for contig_name, _st, _end in small_chunk_keys:
-        chunk_name = contig_name + '-' + str(_st) + '-' + str(_end)
+    for file_name, chunk_name in small_chunk_keys:
 
         with h5py.File(file_name, 'r') as hdf5_file:
             smaller_chunks = set(hdf5_file['predictions'][contig][chunk_name].keys()) - {'contig_start', 'contig_end'}
@@ -147,24 +146,17 @@ def find_candidates(file_name, contig, small_chunk_keys, p_threshold):
     return contig, reference_dict, candidate_variants
 
 
-def create_consensus_sequence(hdf5_file_path, contig, sequence_chunk_keys, threads, p_threshold):
-    sequence_chunk_keys = sorted(sequence_chunk_keys)
-    sequence_chunk_key_list = list()
-    for sequence_chunk_key in sequence_chunk_keys:
-        contig, st, end = sequence_chunk_key.split('-')
-        sequence_chunk_key_list.append((contig, int(st), int(end)))
-
-    sequence_chunk_key_list = sorted(sequence_chunk_key_list, key=lambda element: (element[1], element[2]))
+def create_consensus_sequence(contig, sequence_chunk_keys, threads, p_threshold):
     all_candidates = defaultdict(list)
     global_reference_dict = defaultdict()
     positions_with_candidates = list()
 
     # generate the dictionary in parallel
     with concurrent.futures.ProcessPoolExecutor(max_workers=threads) as executor:
-        file_chunks = chunks(sequence_chunk_key_list, max(MIN_SEQUENCE_REQUIRED_FOR_MULTITHREADING,
-                                                          int(len(sequence_chunk_key_list) / threads) + 1))
+        file_chunks = chunks(sequence_chunk_keys, max(MIN_SEQUENCE_REQUIRED_FOR_MULTITHREADING,
+                                                      int(len(sequence_chunk_keys) / threads) + 1))
 
-        futures = [executor.submit(find_candidates, hdf5_file_path, contig, file_chunk, p_threshold)
+        futures = [executor.submit(find_candidates, contig, file_chunk, p_threshold)
                    for file_chunk in file_chunks]
         for fut in concurrent.futures.as_completed(futures):
             if fut.exception() is None:
