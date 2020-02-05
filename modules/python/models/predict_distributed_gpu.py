@@ -38,7 +38,7 @@ def predict(input_filepath, file_chunks, output_filepath, model_path, batch_size
     transducer_model.to(device_id)
     transducer_model.eval()
     transducer_model = DistributedDataParallel(transducer_model, device_ids=[device_id])
-    tqdm.set_lock(device_id)
+
     progress_bar = tqdm(
         total=len(data_loader),
         ncols=100,
