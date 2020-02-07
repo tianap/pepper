@@ -50,7 +50,7 @@ class DataStore(object):
         self._meta = self.meta
         self._meta.update(meta)
 
-    def write_summary(self, region, image, label, position, index, chunk_id, summary_name, ref_seq, coverage):
+    def write_summary(self, region, image, label, position, index, chunk_id, summary_name, ref_seq):
         contig_name, region_start, region_end = region
         if 'summaries' not in self.meta:
             self.meta['summaries'] = set()
@@ -66,4 +66,3 @@ class DataStore(object):
             self.file_handler['{}/{}/{}'.format(self._summary_path_, summary_name, 'region_end')] = region_end
             self.file_handler['{}/{}/{}'.format(self._summary_path_, summary_name, 'chunk_id')] = chunk_id
             self.file_handler['{}/{}/{}'.format(self._summary_path_, summary_name, 'ref_seq')] = ref_seq
-            self.file_handler['{}/{}/{}'.format(self._summary_path_, summary_name, 'coverage')] = coverage

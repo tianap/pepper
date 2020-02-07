@@ -39,15 +39,13 @@ def candidates_to_variants(candidates, contig):
     return contig, ref_start, ref_end, ref_seq, alleles, genotype
 
 
-def write_vcf(contig, all_candidate_positions, candidate_positional_map_h1, candidate_positional_map_h2, vcf_file):
+def write_vcf(contig, all_candidate_positions, candidate_positional_map, vcf_file):
     # print(candidate_map)
     # candidate_map = {2931716: {(2931716, 2931719, 'CTT', 'C', 1, 'DEL'), (2931716, 2931718, 'CT', 'C', 2, 'DEL')}}
     for pos in sorted(all_candidate_positions):
         candidates = list()
-        if pos in candidate_positional_map_h1:
-            candidates.append(candidate_positional_map_h1[pos])
-        if pos in candidate_positional_map_h2:
-            candidates.append(candidate_positional_map_h2[pos])
+        if pos in candidate_positional_map:
+            candidates.append(candidate_positional_map[pos])
 
         if len(candidates) == 0:
             continue
@@ -64,7 +62,7 @@ def candidate_finder(hdf_file_path, reference_file, sample_name, output_path, th
     with h5py.File(hdf_file_path, 'r') as hdf5_file:
         contigs = list(hdf5_file['predictions'].keys())
 
-    candidates_file = open(output_path+'candidates.tsv', 'w')
+    # candidates_file = open(output_path+'candidates.tsv', 'w')
     vcf_file = VCFWriter(reference_file, contigs, sample_name, output_path, "candidates_as_variants")
 
     for contig in contigs:
@@ -73,30 +71,30 @@ def candidate_finder(hdf_file_path, reference_file, sample_name, output_path, th
         with h5py.File(hdf_file_path, 'r') as hdf5_file:
             chunk_keys = sorted(hdf5_file['predictions'][contig].keys())
 
-        all_candidate_positions, candidate_positional_map_h1, candidate_positional_map_h2 = \
+        all_candidate_positions, candidate_positional_map = \
             find_candidates(hdf_file_path,  reference_file, contig, chunk_keys, threads)
 
         sys.stderr.write(TextColor.BLUE + "INFO: FINISHED PROCESSING " + contig + ", TOTAL CANDIDATES FOUND: "
                          + str(len(all_candidate_positions)) + " " + ".\n" + TextColor.END)
 
         # output TSV
-        header = ["CONTIG", "START", "END_POS", "REF", "ALT", "HP", "TYPE"]
-        header_out = '\t'.join([str(item) for item in list(header)])
-        candidates_file.write(header_out + "\n")
+        # header = ["CONTIG", "START", "END_POS", "REF", "ALT", "HP", "TYPE"]
+        # header_out = '\t'.join([str(item) for item in list(header)])
+        # candidates_file.write(header_out + "\n")
 
-        if all_candidate_positions is not None and len(all_candidate_positions) > 0:
-            for candidate_pos in sorted(all_candidate_positions):
-                if candidate_pos in candidate_positional_map_h1:
-                    candidate = candidate_positional_map_h1[candidate_pos]
-                    candidate_out = '\t'.join([contig] + [str(item) for item in list(candidate)])
-                    candidates_file.write(candidate_out + "\n")
+        # if all_candidate_positions is not None and len(all_candidate_positions) > 0:
+        #     for candidate_pos in sorted(all_candidate_positions):
+        #         if candidate_pos in candidate_positional_map_h1:
+        #             candidate = candidate_positional_map_h1[candidate_pos]
+        #             candidate_out = '\t'.join([contig] + [str(item) for item in list(candidate)])
+        #             candidates_file.write(candidate_out + "\n")
+        #
+        #         if candidate_pos in candidate_positional_map_h2:
+        #             candidate = candidate_positional_map_h2[candidate_pos]
+        #             candidate_out = '\t'.join([contig] + [str(item) for item in list(candidate)])
+        #             candidates_file.write(candidate_out + "\n")
 
-                if candidate_pos in candidate_positional_map_h2:
-                    candidate = candidate_positional_map_h2[candidate_pos]
-                    candidate_out = '\t'.join([contig] + [str(item) for item in list(candidate)])
-                    candidates_file.write(candidate_out + "\n")
-
-        write_vcf(contig, all_candidate_positions, candidate_positional_map_h1, candidate_positional_map_h2, vcf_file)
+        write_vcf(contig, all_candidate_positions, candidate_positional_map, vcf_file)
 
     hdf5_file.close()
 

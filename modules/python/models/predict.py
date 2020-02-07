@@ -51,36 +51,32 @@ def predict(test_file, output_filename, model_path, batch_size, threads, num_wor
     sys.stderr.write(TextColor.CYAN + 'MODEL LOADED\n')
 
     with torch.no_grad():
-        for contig, contig_start, contig_end, chunk_id, images, position, index, ref_seq, coverage, labels in tqdm(test_loader, ncols=50):
+        for contig, contig_start, contig_end, chunk_id, images, position, index, ref_seq, labels in tqdm(test_loader, ncols=50):
             sys.stderr.flush()
             images = images.type(torch.FloatTensor)
 
-            hidden_h1 = torch.zeros(images.size(0), 2 * TrainOptions.GRU_LAYERS, TrainOptions.HIDDEN_SIZE)
-            hidden_h2 = torch.zeros(images.size(0), 2 * TrainOptions.GRU_LAYERS, TrainOptions.HIDDEN_SIZE)
+            hidden = torch.zeros(images.size(0), 2 * TrainOptions.GRU_LAYERS, TrainOptions.HIDDEN_SIZE)
 
-            prediction_base_counter_h1 = torch.zeros((images.size(0), ImageSizeOptions.SEQ_LENGTH, ImageSizeOptions.TOTAL_LABELS))
-            prediction_base_counter_h2 = torch.zeros((images.size(0), ImageSizeOptions.SEQ_LENGTH, ImageSizeOptions.TOTAL_LABELS))
+            prediction_base_counter = torch.zeros((images.size(0),
+                                                   ImageSizeOptions.SEQ_LENGTH,
+                                                   ImageSizeOptions.TOTAL_LABELS))
 
             if gpu_mode:
                 images = images.cuda()
-                hidden_h1 = hidden_h1.cuda()
-                hidden_h2 = hidden_h2.cuda()
-                prediction_base_counter_h1 = prediction_base_counter_h1.cuda()
-                prediction_base_counter_h2 = prediction_base_counter_h2.cuda()
+                hidden = hidden.cuda()
+                prediction_base_counter = prediction_base_counter.cuda()
 
             for i in range(0, ImageSizeOptions.SEQ_LENGTH, TrainOptions.WINDOW_JUMP):
                 if i + TrainOptions.TRAIN_WINDOW > ImageSizeOptions.SEQ_LENGTH:
                     break
                 chunk_start = i
                 chunk_end = i + TrainOptions.TRAIN_WINDOW
+
                 # chunk all the data
-                image_chunk_h  = images[:, 0, i:i+TrainOptions.TRAIN_WINDOW]
-                image_chunk_h1 = images[:, 1, i:i+TrainOptions.TRAIN_WINDOW]
-                image_chunk_h2 = images[:, 2, i:i+TrainOptions.TRAIN_WINDOW]
+                image_chunk = images[:, i:i+TrainOptions.TRAIN_WINDOW]
 
                 # run inference
-                out_h1, hidden_h1 = transducer_model(image_chunk_h1, hidden_h1)
-                out_h2, hidden_h2 = transducer_model(image_chunk_h2, hidden_h2)
+                out, hidden = transducer_model(image_chunk, hidden)
 
                 # now calculate how much padding is on the top and bottom of this chunk so we can do a simple
                 # add operation
@@ -98,30 +94,23 @@ def predict(test_file, output_filename, model_path, batch_size, threads, num_wor
 
                 # run the softmax and padding layers
                 if gpu_mode:
-                    base_prediction_h1 = (inference_layers(out_h1) * 10).type(torch.IntTensor).cuda()
-                    base_prediction_h2 = (inference_layers(out_h2) * 10).type(torch.IntTensor).cuda()
+                    base_prediction = (inference_layers(out) * 10).type(torch.IntTensor).cuda()
                 else:
-                    base_prediction_h1 = (inference_layers(out_h1) * 10).type(torch.IntTensor)
-                    base_prediction_h2 = (inference_layers(out_h2) * 10).type(torch.IntTensor)
+                    base_prediction = (inference_layers(out) * 10).type(torch.IntTensor)
 
                 # now simply add the tensor to the global counter
-                prediction_base_counter_h1 = torch.add(prediction_base_counter_h1, base_prediction_h1)
-                prediction_base_counter_h2 = torch.add(prediction_base_counter_h2, base_prediction_h2)
+                prediction_base_counter = torch.add(prediction_base_counter, base_prediction)
 
-            # all done now create a SEQ_LENGTH long prediction list
-            # prediction_base_counter_h1 = prediction_base_counter_h1.cpu()
-            # prediction_base_counter_h2 = prediction_base_counter_h2.cpu()
+            base_values, base_labels = torch.max(prediction_base_counter, 2)
 
-            base_values_h1, base_labels_h1 = torch.max(prediction_base_counter_h1, 2)
-            base_values_h2, base_labels_h2 = torch.max(prediction_base_counter_h2, 2)
-
-            predicted_base_labels_h1 = base_labels_h1.cpu().numpy()
-            predicted_base_labels_h2 = base_labels_h2.cpu().numpy()
+            predicted_base_labels = base_labels.cpu().numpy()
 
             for i in range(images.size(0)):
-                prediction_data_file.write_prediction(contig[i], contig_start[i], contig_end[i], chunk_id[i],
-                                                      position[i], index[i],
+                prediction_data_file.write_prediction(contig[i],
+                                                      contig_start[i],
+                                                      contig_end[i],
+                                                      chunk_id[i],
+                                                      position[i],
+                                                      index[i],
                                                       ref_seq[i],
-                                                      coverage[i],
-                                                      predicted_base_labels_h1[i],
-                                                      predicted_base_labels_h2[i])
+                                                      predicted_base_labels[i])

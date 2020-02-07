@@ -36,18 +36,18 @@ if __name__ == '__main__':
         help="FASTA file containing the draft assembly."
     )
     parser.add_argument(
-        "-tb1",
-        "--truth_bam_h1",
+        "-tb",
+        "--truth_bam",
         type=str,
         default=None,
         help="BAM file containing mapping of true assembly to the draft assembly."
     )
     parser.add_argument(
-        "-tb2",
-        "--truth_bam_h2",
-        type=str,
-        default=None,
-        help="BAM file containing mapping of true assembly to the draft assembly."
+        "-hp",
+        "--hp_tag",
+        type=int,
+        default=0,
+        help="Haplotype tag to process from the BAM file."
     )
     parser.add_argument(
         "-r",
@@ -88,16 +88,16 @@ if __name__ == '__main__':
     chr_list = UserInterfaceSupport.get_chromosome_list(FLAGS.region, FLAGS.draft, FLAGS.region_bed)
 
     if FLAGS.train_mode:
-        if not FLAGS.truth_bam_h1 or not FLAGS.truth_bam_h2:
-            raise Exception(TextColor.RED + "ERROR: TRAIN MODE REQUIRES --truth_bam_h1 TO BE SET.\n" + TextColor.END)
+        if not FLAGS.truth_bam or not FLAGS.truth_bam:
+            raise Exception(TextColor.RED + "ERROR: TRAIN MODE REQUIRES --truth_bam TO BE SET.\n" + TextColor.END)
 
     output_dir = UserInterfaceSupport.handle_output_directory(os.path.abspath(FLAGS.output_dir))
 
     UserInterfaceSupport.chromosome_level_parallelization(chr_list,
                                                           FLAGS.bam,
                                                           FLAGS.draft,
-                                                          FLAGS.truth_bam_h1,
-                                                          FLAGS.truth_bam_h2,
+                                                          FLAGS.truth_bam,
+                                                          FLAGS.hp_tag,
                                                           output_dir,
                                                           FLAGS.threads,
                                                           FLAGS.train_mode)

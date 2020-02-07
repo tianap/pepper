@@ -58,13 +58,12 @@ class SequenceDataset(Dataset):
             contig_start = hdf5_file['summaries'][image_name]['region_start'][()]
             contig_end = hdf5_file['summaries'][image_name]['region_end'][()]
             ref_seq = hdf5_file['summaries'][image_name]['ref_seq'][()]
-            coverage = hdf5_file['summaries'][image_name]['coverage'][()]
             if self.load_labels:
                 label = hdf5_file['summaries'][image_name]['label'][()]
             else:
                 label = []
 
-        return contig, contig_start, contig_end, chunk_id, image, position, index, ref_seq, coverage, label
+        return contig, contig_start, contig_end, chunk_id, image, position, index, ref_seq, label
 
     def __len__(self):
         return len(self.all_images)

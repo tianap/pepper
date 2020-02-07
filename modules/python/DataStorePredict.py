@@ -46,9 +46,7 @@ class DataStore(object):
         self._meta = self.meta
         self._meta.update(meta)
 
-    def write_prediction(self, contig, contig_start, contig_end, chunk_id, position, index, ref_seq, coverage,
-                         predicted_bases_h1,
-                         predicted_bases_h2):
+    def write_prediction(self, contig, contig_start, contig_end, chunk_id, position, index, ref_seq, predicted_bases):
         chunk_name_prefix = str(contig) + "-" + str(contig_start.item()) + "-" + str(contig_end.item())
         chunk_name_suffix = str(chunk_id.item())
 
@@ -75,10 +73,6 @@ class DataStore(object):
             self.file_handler['{}/{}/{}/{}/{}'.format(self._prediction_path_, contig, chunk_name_prefix,
                                                       chunk_name_suffix, 'ref_seq')] = ref_seq
             self.file_handler['{}/{}/{}/{}/{}'.format(self._prediction_path_, contig, chunk_name_prefix,
-                                                      chunk_name_suffix, 'coverage')] = coverage
-            self.file_handler['{}/{}/{}/{}/{}'.format(self._prediction_path_, contig, chunk_name_prefix,
-                                                      chunk_name_suffix, 'bases_h1')] = predicted_bases_h1.astype(np.uint8)
-            self.file_handler['{}/{}/{}/{}/{}'.format(self._prediction_path_, contig, chunk_name_prefix,
-                                                      chunk_name_suffix, 'bases_h2')] = predicted_bases_h2.astype(np.uint8)
+                                                      chunk_name_suffix, 'bases')] = predicted_bases.astype(np.uint8)
 
 
