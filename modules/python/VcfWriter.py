@@ -6,6 +6,7 @@ Candidate = collections.namedtuple('Candidate', 'chromosome_name pos_start pos_e
                                                 'alternate_alleles allele_depths '
                                                 'allele_frequencies genotype qual gq predictions')
 
+
 class VCFWriter:
     def __init__(self, reference_file_path, contigs, sample_name, output_dir, filename):
         self.fasta_handler = PEPPER.FASTA_handler(reference_file_path)
