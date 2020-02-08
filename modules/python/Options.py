@@ -12,7 +12,7 @@ class ImageSizeOptions(object):
 
 
 class ReadFilterOptions(object):
-    MIN_MAPQ = 10
+    MIN_MAPQ = 2
     MIN_BASEQ = 0
     INCLUDE_SUPPLEMENTARY = False
 
