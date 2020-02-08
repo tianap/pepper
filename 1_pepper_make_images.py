@@ -46,7 +46,8 @@ if __name__ == '__main__':
         "-hp",
         "--hp_tag",
         type=int,
-        default=0,
+        required=True,
+        default=None,
         help="Haplotype tag to process from the BAM file."
     )
     parser.add_argument(
