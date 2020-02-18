@@ -40,7 +40,7 @@ class UserInterfaceView:
         # name of the chromosome
         self.chromosome_name = chromosome_name
 
-    def parse_region(self, start_position, end_position):
+    def parse_region(self, start_position, end_position, realignment_flag):
         """
         Generate labeled images of a given region of the genome
         :param start_position: Start position of the region
@@ -57,7 +57,8 @@ class UserInterfaceView:
         images, labels, positions, image_chunk_ids, all_ref_seq = \
             alignment_summarizer.create_summary(self.truth_bam,
                                                 self.hp_tag,
-                                                self.train_mode)
+                                                self.train_mode,
+                                                realignment_flag)
 
         return images, labels, positions, image_chunk_ids, all_ref_seq
 
@@ -154,7 +155,7 @@ class UserInterfaceSupport:
 
     @staticmethod
     def single_worker(args, _start, _end):
-        chr_name, bam_file, draft_file, truth_bam, hp_tag, train_mode = args
+        chr_name, bam_file, draft_file, truth_bam, hp_tag, train_mode, realignment_flag = args
 
         view = UserInterfaceView(chromosome_name=chr_name,
                                  bam_file_path=bam_file,
@@ -163,7 +164,7 @@ class UserInterfaceSupport:
                                  hp_tag=hp_tag,
                                  train_mode=train_mode)
 
-        images, labels, positions, image_chunk_ids, ref_seq = view.parse_region(_start, _end)
+        images, labels, positions, image_chunk_ids, ref_seq = view.parse_region(_start, _end, realignment_flag)
         region = (chr_name, _start, _end)
 
         return images, labels, positions, image_chunk_ids, region, ref_seq
@@ -172,7 +173,7 @@ class UserInterfaceSupport:
     def image_generator(args, all_intervals, total_threads, thread_id):
         thread_prefix = "[THREAD " + "{:02d}".format(thread_id) + "]"
 
-        output_path, bam_file, draft_file, truth_bam, hp_tag, train_mode = args
+        output_path, bam_file, draft_file, truth_bam, hp_tag, train_mode, realignment_flag = args
         file_name = output_path + "pepper_hp_images_thread_" + str(thread_id) + "_hp" + str(hp_tag) + ".hdf"
 
         intervals = [r for i, r in enumerate(all_intervals) if i % total_threads == thread_id]
@@ -187,7 +188,7 @@ class UserInterfaceSupport:
         with DataStore(file_name, 'w') as output_hdf_file:
             for counter, interval in enumerate(intervals):
                 chr_name, _start, _end = interval
-                img_args = (chr_name, bam_file, draft_file, truth_bam, hp_tag, train_mode)
+                img_args = (chr_name, bam_file, draft_file, truth_bam, hp_tag, train_mode, realignment_flag)
                 images, labels, positions, chunk_ids, region, ref_seqs = \
                     UserInterfaceSupport.single_worker(img_args, _start, _end)
 
@@ -222,7 +223,8 @@ class UserInterfaceSupport:
                                          hp_tag,
                                          output_path,
                                          total_threads,
-                                         train_mode):
+                                         train_mode,
+                                         realignment_flag):
         max_size = 1000
         start_time = time.time()
         fasta_handler = PEPPER.FASTA_handler(draft_file)
@@ -252,7 +254,7 @@ class UserInterfaceSupport:
                          + " TOTAL INTERVALS: " + str(len(all_intervals)) + "\n" + TextColor.END)
         sys.stderr.flush()
 
-        args = (output_path, bam_file, draft_file, truth_bam, hp_tag, train_mode)
+        args = (output_path, bam_file, draft_file, truth_bam, hp_tag, train_mode, realignment_flag)
         with concurrent.futures.ProcessPoolExecutor(max_workers=total_threads) as executor:
             futures = [executor.submit(UserInterfaceSupport.image_generator, args, all_intervals, total_threads,
                                        thread_id)

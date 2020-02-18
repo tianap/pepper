@@ -72,6 +72,13 @@ if __name__ == '__main__':
         help="If true then labeled images will be generated."
     )
     parser.add_argument(
+        "-rf",
+        "--realignment_flag",
+        type=boolean_string,
+        default=False,
+        help="If true then local realignment will be performed."
+    )
+    parser.add_argument(
         "-o",
         "--output_dir",
         type=str,
@@ -101,4 +108,5 @@ if __name__ == '__main__':
                                                           FLAGS.hp_tag,
                                                           output_dir,
                                                           FLAGS.threads,
-                                                          FLAGS.train_mode)
+                                                          FLAGS.train_mode,
+                                                          FLAGS.realignment_flag)
